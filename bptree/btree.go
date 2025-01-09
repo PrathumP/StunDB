@@ -8,6 +8,57 @@ type Btree struct {
 	root *Node
 }
 
+func (tree *Btree) insert(key Keytype, value Valuetype) {
+	if tree.root == nil {
+		tree.root = NewNode(true)
+		tree.root.insertAt(0, key, value)
+		return
+	}
+
+	node := tree.root
+	var path []*Node
+
+	for !node.isleaf {
+		path = append(path, node)
+		idx := findindex(key, *node)
+		node = node.children[idx]
+	}
+
+	idx := findindex(key, *node)
+	if idx < len(node.keys) && bytes.Equal(node.keys[idx], key) {
+		node.values[idx] = value
+		return
+	}
+
+	if len(node.keys) < MaxKeys {
+		node.insertAt(idx, key, value)
+		return
+	}
+
+	midKey, midValue, newNode := tree.splitNodeWithInsert(node, key, value)
+
+	for i := len(path) - 1; i >= 0; i-- {
+		parent := path[i]
+		childIdx := findindex(midKey, *parent)
+
+		if len(parent.keys) < MaxKeys {
+
+			parent.insertAt(childIdx, midKey, midValue)
+			parent.insertChildAt(childIdx+1, newNode)
+			return
+		}
+		parent.children = append(parent.children, newNode)
+
+		midKey, midValue, newNode = tree.splitNodeWithInsert(parent, midKey, midValue)
+	}
+
+	newRoot := NewNode(false)
+	newRoot.keys = append(newRoot.keys, midKey)
+	newRoot.values = append(newRoot.values, midValue)
+	newRoot.children = append(newRoot.children, tree.root, newNode)
+	tree.root = newRoot
+}
+
 func (tree *Btree) splitNodeWithInsert(node *Node, insertKey Keytype, insertValue Valuetype) (Keytype, Valuetype, *Node) {
 
 	tempKeys := make([]Keytype, 0, len(node.keys)+1)
@@ -34,10 +85,8 @@ func (tree *Btree) splitNodeWithInsert(node *Node, insertKey Keytype, insertValu
 	newNode.values = append(newNode.values, tempValues[mid+1:]...)
 
 	if !node.isleaf {
-
 		tempChildren := make([]*Node, 0, len(node.children)+1)
 		tempChildren = append(tempChildren, node.children[:insertPos+1]...)
-
 		tempChildren = append(tempChildren, node.children[insertPos+1:]...)
 
 		newNode.children = append(newNode.children, tempChildren[mid+1:]...)
@@ -46,59 +95,7 @@ func (tree *Btree) splitNodeWithInsert(node *Node, insertKey Keytype, insertValu
 
 	node.keys = tempKeys[:mid]
 	node.values = tempValues[:mid]
-
 	return midKey, midValue, newNode
-}
-
-func (tree *Btree) insertNonFull(node *Node, key Keytype, value Valuetype) {
-	idx := findindex(key, *node)
-
-	if node.isleaf {
-		if idx < len(node.keys) && bytes.Equal(node.keys[idx], key) {
-			node.values[idx] = value
-			return
-		}
-		node.insertAt(idx, key, value)
-		return
-	}
-
-	childIdx := idx
-	child := node.children[childIdx]
-
-	if len(child.keys) >= MaxKeys {
-		midKey, midValue, newChild := tree.splitNodeWithInsert(child, key, value)
-
-		node.insertAt(childIdx, midKey, midValue)
-		node.insertChildAt(childIdx+1, newChild)
-		return
-	}
-
-	tree.insertNonFull(node.children[childIdx], key, value)
-}
-
-func (tree *Btree) insert(key Keytype, value Valuetype) {
-
-	if tree.root == nil {
-		tree.root = NewNode(true)
-		tree.root.insertAt(0, key, value)
-		return
-	}
-
-	if len(tree.root.keys) >= MaxKeys {
-
-		newRoot := NewNode(false)
-		oldRoot := tree.root
-		tree.root = newRoot
-
-		midKey, midValue, newNode := tree.splitNodeWithInsert(oldRoot, key, value)
-
-		newRoot.keys = append(newRoot.keys, midKey)
-		newRoot.values = append(newRoot.values, midValue)
-		newRoot.children = append(newRoot.children, oldRoot, newNode)
-		return
-	}
-
-	tree.insertNonFull(tree.root, key, value)
 }
 
 func (t *Btree) Delete(key []byte) bool {

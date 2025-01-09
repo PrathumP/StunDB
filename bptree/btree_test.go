@@ -2,7 +2,6 @@ package bptree
 
 import (
 	"bytes"
-	"crypto/rand"
 	"fmt"
 	"sort"
 	"strings"
@@ -10,6 +9,7 @@ import (
 )
 
 func TestBTreeInsert(t *testing.T) {
+
 	tests := []struct {
 		name     string
 		keys     [][]byte
@@ -125,7 +125,23 @@ func TestBTreeInsert(t *testing.T) {
 				return expected
 			}(),
 		},
-
+		{
+			name: "Insert all keys from a to z",
+			keys: func() [][]byte {
+				var keys [][]byte
+				for c := 'a'; c <= 'z'; c++ {
+					keys = append(keys, []byte{byte(c)})
+				}
+				return keys
+			}(),
+			expected: func() [][]byte {
+				var expected [][]byte
+				for c := 'a'; c <= 'z'; c++ {
+					expected = append(expected, []byte{byte(c)})
+				}
+				return expected
+			}(),
+		},
 		// Special Characters
 		{
 			name: "Insert keys with special characters",
@@ -151,40 +167,20 @@ func TestBTreeInsert(t *testing.T) {
 				[]byte("aaaa"), []byte("aaaaa"), []byte("aaaaaa"),
 			},
 		},
-
-		// Stress Test
 		{
-			name: "Random key insertion",
+			name: "Insert 100 sequential keys",
 			keys: func() [][]byte {
 				var keys [][]byte
-				for i := 0; i < 50; i++ {
-					key := make([]byte, 4)
-					rand.Read(key)
-					keys = append(keys, key)
+				for i := 0; i < 100; i++ {
+					keys = append(keys, []byte(fmt.Sprintf("key%03d", i))) // Use %03d for 3-digit padding
 				}
 				return keys
 			}(),
 			expected: func() [][]byte {
-				// This will be compared after sorting in the test
 				var expected [][]byte
-				seen := make(map[string]bool)
-				for _, key := range func() [][]byte {
-					var keys [][]byte
-					for i := 0; i < 50; i++ {
-						key := make([]byte, 4)
-						rand.Read(key)
-						keys = append(keys, key)
-					}
-					return keys
-				}() {
-					if !seen[string(key)] {
-						expected = append(expected, key)
-						seen[string(key)] = true
-					}
+				for i := 0; i < 100; i++ {
+					expected = append(expected, []byte(fmt.Sprintf("key%03d", i))) // Use %03d for 3-digit padding
 				}
-				sort.Slice(expected, func(i, j int) bool {
-					return bytes.Compare(expected[i], expected[j]) < 0
-				})
 				return expected
 			}(),
 		},
@@ -199,7 +195,7 @@ func TestBTreeInsert(t *testing.T) {
 
 			for _, key := range tt.keys {
 				tree.insert(key, key)
-				t.Logf("After inserting %s:", key)
+				t.Logf("After inserting %d:", key)
 				printBFS(t, tree.root)
 
 				// Validate tree properties after each insertion
@@ -557,7 +553,13 @@ func printBFS(t *testing.T, root *Node) {
 		return
 	}
 
-	queue := []*Node{root}
+	// Queue to hold nodes along with their parent information
+	type NodeWithParent struct {
+		node   *Node
+		parent *Node // Pointer to the parent node
+	}
+
+	queue := []NodeWithParent{{node: root, parent: nil}}
 	level := 0
 
 	for len(queue) > 0 {
@@ -566,15 +568,25 @@ func printBFS(t *testing.T, root *Node) {
 		t.Logf("%sLevel %d:", indent, level)
 
 		for i := 0; i < levelSize; i++ {
-			current := queue[0]
+			currentWithParent := queue[0]
+			currentNode := currentWithParent.node
+			parentNode := currentWithParent.parent
 			queue = queue[1:]
 
-			t.Logf("%s Node %d keys: %v", indent, i, current.keys)
-			if !current.isleaf {
-				queue = append(queue, current.children...)
+			// Include parent information in the log
+			if parentNode != nil {
+				t.Logf("%s Node %d keys: %v (Parent keys: %v)", indent, i, currentNode.keys, parentNode.keys)
+			} else {
+				t.Logf("%s Node %d keys: %v (Parent: nil)", indent, i, currentNode.keys)
+			}
+
+			// Add children to the queue along with their parent information
+			if !currentNode.isleaf {
+				for _, child := range currentNode.children {
+					queue = append(queue, NodeWithParent{node: child, parent: currentNode})
+				}
 			}
 		}
-
 		level++
 	}
 }
