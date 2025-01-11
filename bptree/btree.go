@@ -2,6 +2,7 @@ package bptree
 
 import (
 	"bytes"
+	"errors"
 )
 
 type Btree struct {
@@ -229,4 +230,25 @@ func (n *Node) fillChildAt(pos int) {
 		n.values = append(n.values[:pos], n.values[pos+1:]...)
 		n.children = append(n.children[:pos+1], n.children[pos+2:]...)
 	}
+}
+
+func (t *Btree) Find(key []byte) ([]byte, error) {
+	for next := t.root; next != nil; {
+		pos := findindex(key, *next)
+
+		if pos < len(next.keys) && bytes.Equal(next.keys[pos], key) {
+			return next.values[pos], nil
+		}
+
+		if next.isleaf {
+			return nil, errors.New("key not found")
+		}
+
+		if pos >= len(next.children) {
+			return nil, errors.New("key not found")
+		}
+		next = next.children[pos]
+	}
+
+	return nil, errors.New("key not found")
 }

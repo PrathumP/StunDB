@@ -2,6 +2,7 @@ package bptree
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -464,6 +465,101 @@ func TestBTreeDelete(t *testing.T) {
 				if !found {
 					t.Errorf("Expected key %s not found. Remaining keys: %v", expected, remainingKeys)
 				}
+			}
+		})
+	}
+}
+
+func TestBtreeFind(t *testing.T) {
+	// Define test cases
+	testCases := []struct {
+		name        string
+		keys        [][]byte
+		searchKey   []byte
+		expectedKey []byte
+		expectedErr error
+	}{
+		{
+			name:        "Key found in root node",
+			keys:        [][]byte{[]byte("key1"), []byte("key2"), []byte("key3")},
+			searchKey:   []byte("key2"),
+			expectedKey: []byte("key2"),
+			expectedErr: nil,
+		},
+		{
+			name:        "Key found in leaf node",
+			keys:        [][]byte{[]byte("key1"), []byte("key2"), []byte("key3"), []byte("key4"), []byte("key5")},
+			searchKey:   []byte("key4"),
+			expectedKey: []byte("key4"),
+			expectedErr: nil,
+		},
+		{
+			name:        "Key found in internal node",
+			keys:        [][]byte{[]byte("key1"), []byte("key2"), []byte("key3"), []byte("key4"), []byte("key5")},
+			searchKey:   []byte("key3"),
+			expectedKey: []byte("key3"),
+			expectedErr: nil,
+		},
+		{
+			name:        "Key not found",
+			keys:        [][]byte{[]byte("key1"), []byte("key2"), []byte("key3")},
+			searchKey:   []byte("key4"),
+			expectedKey: nil,
+			expectedErr: errors.New("key not found"),
+		},
+		{
+			name:        "Empty tree",
+			keys:        [][]byte{},
+			searchKey:   []byte("key1"),
+			expectedKey: nil,
+			expectedErr: errors.New("key not found"),
+		},
+		{
+			name:        "Duplicate keys",
+			keys:        [][]byte{[]byte("key1"), []byte("key1"), []byte("key2")},
+			searchKey:   []byte("key1"),
+			expectedKey: []byte("key1"),
+			expectedErr: nil,
+		},
+		{
+			name: "Large dataset",
+			keys: func() [][]byte {
+				var keys [][]byte
+				for i := 0; i < 100; i++ {
+					keys = append(keys, []byte(fmt.Sprintf("key%03d", i)))
+				}
+				return keys
+			}(),
+			searchKey:   []byte("key050"),
+			expectedKey: []byte("key050"),
+			expectedErr: nil,
+		},
+	}
+
+	// Run test cases
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Initialize the B-tree
+			tree := &Btree{}
+
+			// Insert keys into the B-tree
+			for _, key := range tc.keys {
+				tree.insert(key, nil)
+			}
+
+			// Search for the key
+			foundKey, err := tree.Find(tc.searchKey)
+
+			// Check if the error matches the expected error
+			if (err == nil && tc.expectedErr != nil) || (err != nil && tc.expectedErr == nil) {
+				t.Errorf("Unexpected error: got %v, expected %v", err, tc.expectedErr)
+			} else if err != nil && tc.expectedErr != nil && err.Error() != tc.expectedErr.Error() {
+				t.Errorf("Unexpected error message: got %v, expected %v", err, tc.expectedErr)
+			}
+
+			// Check if the found key matches the expected key
+			if !bytes.Equal(foundKey, tc.expectedKey) {
+				t.Errorf("Unexpected key: got %v, expected %v", foundKey, tc.expectedKey)
 			}
 		})
 	}
