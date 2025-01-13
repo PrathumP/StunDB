@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 )
 
 func TestBTreeInsert(t *testing.T) {
@@ -195,7 +197,7 @@ func TestBTreeInsert(t *testing.T) {
 			t.Logf("Keys to insert: %v", tt.keys)
 
 			for _, key := range tt.keys {
-				tree.insert(key, key)
+				tree.Insert(key, key)
 				t.Logf("After inserting %d:", key)
 				printBFS(t, tree.root)
 
@@ -423,7 +425,7 @@ func TestBTreeDelete(t *testing.T) {
 			t.Logf("Test case: %s", tt.name)
 			t.Logf("Inserting keys: %v", tt.insertKeys)
 			for _, key := range tt.insertKeys {
-				tree.insert(key, key)
+				tree.Insert(key, key)
 			}
 
 			t.Log("Initial tree structure:")
@@ -544,7 +546,7 @@ func TestBtreeFind(t *testing.T) {
 
 			// Insert keys into the B-tree
 			for _, key := range tc.keys {
-				tree.insert(key, nil)
+				tree.Insert(key, key)
 			}
 
 			// Search for the key
@@ -684,5 +686,260 @@ func printBFS(t *testing.T, root *Node) {
 			}
 		}
 		level++
+	}
+}
+
+func TestConcurrentOperations(t *testing.T) {
+	tree := &Btree{}
+	const numWorkers = 10
+	const numOperations = 100 // Reduced for faster testing
+
+	// Create buffered channels to prevent goroutine leaks
+	insertCh := make(chan int, numOperations)
+	readCh := make(chan int, numOperations)
+
+	// Fill channels before starting workers
+	for i := 0; i < numOperations; i++ {
+		insertCh <- i
+		readCh <- i
+	}
+	close(insertCh)
+	close(readCh)
+
+	// Use errgroup for better error handling
+	var wg sync.WaitGroup
+	errCh := make(chan error, numWorkers)
+
+	// Start insert workers
+	for i := 0; i < numWorkers/2; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for num := range insertCh {
+				key := []byte(fmt.Sprintf("%d", num))
+				value := []byte(fmt.Sprintf("%d", num*2))
+				tree.Insert(key, value)
+			}
+		}()
+	}
+
+	// Start read workers
+	for i := 0; i < numWorkers/2; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for num := range readCh {
+				key := []byte(fmt.Sprintf("%d", num))
+				_, err := tree.Find(key)
+				if err != nil && err.Error() != "key not found" {
+					errCh <- fmt.Errorf("unexpected error reading key %d: %v", num, err)
+				}
+			}
+		}()
+	}
+
+	// Wait with timeout
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// Success case
+	case err := <-errCh:
+		t.Fatalf("Test failed with error: %v", err)
+	case <-time.After(10 * time.Second):
+		t.Fatal("Test timed out")
+	}
+
+	// Verify final state
+	for i := 0; i < numOperations; i++ {
+		key := []byte(fmt.Sprintf("%d", i))
+		expectedValue := []byte(fmt.Sprintf("%d", i*2))
+		value, err := tree.Find(key)
+		if err != nil {
+			t.Errorf("Key %d not found after concurrent operations", i)
+			continue
+		}
+		if !bytes.Equal(value, expectedValue) {
+			t.Errorf("Wrong value for key %d: got %v, want %v", i, value, expectedValue)
+		}
+	}
+}
+
+func TestConcurrentStress(t *testing.T) {
+	tree := &Btree{}
+	const numWorkers = 20
+	const numOperations = 5000
+
+	var wg sync.WaitGroup
+	wg.Add(numWorkers)
+
+	// Start mixed operation workers
+	for i := 0; i < numWorkers; i++ {
+		go func(workerID int) {
+			defer wg.Done()
+
+			// Each worker performs a mix of operations
+			for j := 0; j < numOperations; j++ {
+				key := []byte(string(rune(workerID*numOperations + j)))
+				value := []byte(string(rune(j)))
+
+				switch j % 3 {
+				case 0: // Insert
+					tree.Insert(key, value)
+				case 1: // Read
+					tree.Find(key)
+				case 2: // Delete
+					tree.Delete(key)
+				}
+
+				// Small random delay to increase contention chances
+				time.Sleep(time.Microsecond)
+			}
+		}(i)
+	}
+
+	wg.Wait()
+}
+
+func TestConcurrentDeleteAndInsert(t *testing.T) {
+	tree := &Btree{}
+	const numPairs = 1000
+
+	// First insert some data
+	for i := 0; i < numPairs; i++ {
+		key := []byte(string(rune(i)))
+		value := []byte(string(rune(i)))
+		tree.Insert(key, value)
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	// Concurrent delete
+	go func() {
+		defer wg.Done()
+		for i := 0; i < numPairs; i++ {
+			if i%2 == 0 { // Delete even numbers
+				key := []byte(string(rune(i)))
+				tree.Delete(key)
+			}
+		}
+	}()
+
+	// Concurrent insert
+	go func() {
+		defer wg.Done()
+		for i := numPairs; i < numPairs*2; i++ {
+			key := []byte(string(rune(i)))
+			value := []byte(string(rune(i)))
+			tree.Insert(key, value)
+		}
+	}()
+
+	wg.Wait()
+
+	// Verify final state
+	for i := 0; i < numPairs*2; i++ {
+		key := []byte(string(rune(i)))
+		value, err := tree.Find(key)
+
+		if i < numPairs && i%2 == 0 {
+			// Should be deleted
+			if err == nil {
+				t.Errorf("Key %d should have been deleted", i)
+			}
+		} else if i >= numPairs {
+			// Should exist with correct value
+			if err != nil {
+				t.Errorf("Key %d should exist", i)
+			} else if !bytes.Equal(value, key) {
+				t.Errorf("Wrong value for key %d", i)
+			}
+		}
+	}
+}
+
+func TestGranularConcurrency(t *testing.T) {
+	tree := &Btree{}
+	const numWorkers = 50
+	const numOperations = 1000
+
+	var wg sync.WaitGroup
+	wg.Add(numWorkers)
+
+	// Start workers performing mixed operations on different key ranges
+	for i := 0; i < numWorkers; i++ {
+		go func(workerID int) {
+			defer wg.Done()
+
+			// Each worker operates on its own key range to test concurrent access
+			startKey := workerID * numOperations
+			for j := 0; j < numOperations; j++ {
+				key := []byte(string(rune(startKey + j)))
+				value := []byte(string(rune(j)))
+
+				switch j % 3 {
+				case 0:
+					tree.Insert(key, value)
+					// Verify insertion
+					if val, err := tree.Find(key); err == nil || !bytes.Equal(val, value) {
+						t.Errorf("Insert verification failed for key %d", startKey+j)
+					}
+				case 1:
+					tree.Find(key)
+				case 2:
+					tree.Delete(key)
+					// Verify deletion
+					if _, err := tree.Find(key); err != nil {
+						t.Errorf("Delete verification failed for key %d", startKey+j)
+					}
+				}
+			}
+		}(i)
+	}
+
+	wg.Wait()
+}
+
+func TestBasicConcurrency(t *testing.T) {
+	tree := &Btree{}
+
+	// Insert some initial data
+	for i := 0; i < 10; i++ {
+		key := []byte(fmt.Sprintf("%d", i))
+		value := []byte(fmt.Sprintf("%d", i))
+		tree.Insert(key, value)
+	}
+
+	// Run concurrent operations
+	var wg sync.WaitGroup
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			// Mix of operations
+			key := []byte(fmt.Sprintf("%d", id))
+			tree.Insert(key, []byte("new"))
+			tree.Find(key)
+			tree.Delete(key)
+		}(i)
+	}
+
+	// Wait with timeout
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// Success
+	case <-time.After(5 * time.Second):
+		t.Fatal("Test timed out")
 	}
 }

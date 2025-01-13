@@ -1,6 +1,8 @@
 package bptree
 
-import "bytes"
+import (
+	"bytes"
+)
 
 type Keytype []byte
 type Valuetype []byte
@@ -17,7 +19,7 @@ const (
 	MinKeys = MaxKeys / 2
 )
 
-func findindex(key []byte, node Node) int {
+func (node *Node) findindex(key []byte) int {
 	length := len(node.keys)
 	for i := 0; i < length; i++ {
 		if bytes.Compare(node.keys[i], key) >= 0 {
@@ -27,7 +29,7 @@ func findindex(key []byte, node Node) int {
 	return length
 }
 
-func alreadyExists(key []byte, node Node) bool {
+func (node *Node) alreadyExists(key []byte) bool {
 	length := len(node.keys)
 	for i := 0; i < length; i++ {
 		if bytes.Equal(node.keys[i], key) {
@@ -64,9 +66,4 @@ func (node *Node) removeAt(index int) (Keytype, Valuetype) {
 	node.keys = append(node.keys[:index], node.keys[index+1:]...)
 	node.values = append(node.values[:index], node.values[index+1:]...)
 	return removedKey, removedValue
-}
-
-func (node *Node) removeChildAt(index int) *Node {
-	node.children = append(node.children[:index], node.children[index+1:]...)
-	return node.children[index]
 }
