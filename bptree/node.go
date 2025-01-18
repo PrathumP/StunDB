@@ -2,6 +2,7 @@ package bptree
 
 import (
 	"bytes"
+	"sync"
 )
 
 type Keytype []byte
@@ -12,6 +13,7 @@ type Node struct {
 	values   []Valuetype
 	children []*Node
 	isleaf   bool
+	mu       sync.RWMutex
 }
 
 const (

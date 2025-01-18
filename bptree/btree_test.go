@@ -188,7 +188,7 @@ func TestBTreeInsert(t *testing.T) {
 			}(),
 		},
 	}
-
+	start := time.Now()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tree := &Btree{}
@@ -238,6 +238,7 @@ func TestBTreeInsert(t *testing.T) {
 			}
 		})
 	}
+	fmt.Println("Time taken : ", time.Since(start))
 }
 
 func TestBTreeDelete(t *testing.T) {
@@ -942,4 +943,210 @@ func TestBasicConcurrency(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("Test timed out")
 	}
+}
+
+func TestConcurrentInsert(t *testing.T) {
+	tree := &Btree{}
+	const (
+		numGoroutines  = 5
+		keysPerRoutine = 10
+	)
+	var wg sync.WaitGroup
+	errChan := make(chan error, numGoroutines*keysPerRoutine)
+
+	startTime := time.Now()
+
+	for g := 0; g < numGoroutines; g++ {
+		wg.Add(1)
+		go func(routineID int) {
+			defer wg.Done()
+			for i := 0; i < keysPerRoutine; i++ {
+				key := fmt.Sprintf("key-%d-%d", routineID, i)
+				value := fmt.Sprintf("key-%d-%d", routineID, i)
+
+				insertStart := time.Now()
+				t.Logf("Before insert: key=%s\n", key)
+				//printBFS(t, tree.root)
+				tree.Insert([]byte(key), []byte(value))
+				t.Logf("After insert: key=%s\n", key)
+				//printBFS(t, tree.root)
+				duration := time.Since(insertStart)
+
+				// Log long operations
+				if duration > time.Second {
+					errChan <- fmt.Errorf("long insert operation: key=%s, duration=%v", key, duration)
+				}
+
+				// Immediate verification with timeout
+				verifyDone := make(chan error, 1)
+				go func(k, v string) {
+					found, err := tree.Find([]byte(k))
+					if err != nil {
+						verifyDone <- fmt.Errorf("immediate verification failed for key %s: %v", k, err)
+						return
+					}
+					if !bytes.Equal(found, []byte(v)) {
+						verifyDone <- fmt.Errorf("value mismatch for key %s: got %s, want %s",
+							k, found, v)
+						return
+					}
+					verifyDone <- nil
+				}(key, value)
+
+				select {
+				case err := <-verifyDone:
+					if err != nil {
+						errChan <- err
+					}
+				case <-time.After(2 * time.Second):
+					errChan <- fmt.Errorf("verification timed out for key %s", key)
+				}
+			}
+		}(g)
+	}
+
+	// Wait with timeout
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+		close(errChan)
+	}()
+
+	select {
+	case <-done:
+		// Process any errors
+		var errs []error
+		for err := range errChan {
+			errs = append(errs, err)
+		}
+		if len(errs) > 0 {
+			for _, err := range errs {
+				t.Error(err)
+			}
+		}
+	case <-time.After(20 * time.Second):
+		t.Fatalf("Test timed out - possible deadlock\nTree state:\n%s", tree.debugPrint())
+	}
+
+	// Verify final tree state
+	totalExpectedKeys := numGoroutines * keysPerRoutine
+	count := countKeys(tree.root)
+	if count != totalExpectedKeys {
+		t.Errorf("Expected %d keys in tree, but got %d", totalExpectedKeys, count)
+	}
+
+	// Verify all keys are present and retrievable
+	for g := 0; g < numGoroutines; g++ {
+		for i := 0; i < keysPerRoutine; i++ {
+			key := fmt.Sprintf("key-%d-%d", g, i)
+			expectedValue := fmt.Sprintf("key-%d-%d", g, i)
+			found, err := tree.Find([]byte(key))
+			if err != nil {
+				t.Errorf("Final verification: key %s not found: %v", key, err)
+			}
+			if !bytes.Equal(found, []byte(expectedValue)) {
+				t.Errorf("Final verification: value mismatch for key %s, got %s, want %s",
+					key, found, expectedValue)
+			}
+		}
+	}
+
+	// Verify tree structure integrity
+	if err := verifyTreeStructure(tree.root); err != nil {
+		t.Errorf("Tree structure verification failed: %v", err)
+	}
+
+	t.Logf("Test completed in %v", time.Since(startTime))
+}
+
+// Helper function to count total keys in the tree
+func countKeys(node *Node) int {
+	if node == nil {
+		return 0
+	}
+
+	node.mu.RLock()
+	defer node.mu.RUnlock()
+
+	count := len(node.keys)
+	if !node.isleaf {
+		for _, child := range node.children {
+			count += countKeys(child)
+		}
+	}
+	return count
+}
+
+// Helper function to verify tree structure integrity
+func verifyTreeStructure(node *Node) error {
+	if node == nil {
+		return nil
+	}
+
+	node.mu.RLock()
+	defer node.mu.RUnlock()
+
+	// Verify node constraints
+	if len(node.keys) > MaxKeys {
+		return fmt.Errorf("node has %d keys, exceeding MaxKeys %d", len(node.keys), MaxKeys)
+	}
+
+	if !node.isleaf && len(node.keys) < MinKeys-1 {
+		return fmt.Errorf("internal node has %d keys, below MinKeys-1 %d", len(node.keys), MinKeys-1)
+	}
+
+	// Verify key ordering within node
+	for i := 1; i < len(node.keys); i++ {
+		if bytes.Compare(node.keys[i-1], node.keys[i]) >= 0 {
+			return fmt.Errorf("keys not in order: %s >= %s",
+				string(node.keys[i-1]), string(node.keys[i]))
+		}
+	}
+
+	// Verify children if not leaf
+	if !node.isleaf {
+		if len(node.children) != len(node.keys)+1 {
+			return fmt.Errorf("internal node has %d children for %d keys",
+				len(node.children), len(node.keys))
+		}
+
+		// Recursively verify children
+		for _, child := range node.children {
+			if err := verifyTreeStructure(child); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func (t *Btree) debugPrint() string {
+	var sb strings.Builder
+	t.rootLock.RLock()
+	defer t.rootLock.RUnlock()
+
+	if t.root == nil {
+		return "Empty tree"
+	}
+
+	var printNode func(*Node, int)
+	printNode = func(node *Node, level int) {
+		node.mu.RLock()
+		defer node.mu.RUnlock()
+
+		indent := strings.Repeat("  ", level)
+		sb.WriteString(fmt.Sprintf("%sKeys: %v\n", indent, node.keys))
+		sb.WriteString(fmt.Sprintf("%sValues: %v\n", indent, node.values))
+
+		if !node.isleaf {
+			for _, child := range node.children {
+				printNode(child, level+1)
+			}
+		}
+	}
+
+	printNode(t.root, 0)
+	return sb.String()
 }

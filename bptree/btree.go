@@ -3,51 +3,70 @@ package bptree
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"sync"
 )
 
 type Btree struct {
-	root      *Node
-	rootLock  sync.RWMutex
-	childLock sync.RWMutex
+	root     *Node
+	rootLock sync.RWMutex
 }
 
 func (tree *Btree) Insert(key Keytype, value Valuetype) {
+	// Handle empty tree case
 	tree.rootLock.Lock()
-	defer tree.rootLock.Unlock()
+	fmt.Printf("Starting insert for key: %s\n", key)
+	defer fmt.Printf("Completed insert for key: %s\n", key)
 
 	if tree.root == nil {
 		tree.root = NewNode(true)
+		tree.root.mu.Lock()
 		tree.root.insertAt(0, key, value)
+		tree.root.mu.Unlock()
+		tree.rootLock.Unlock()
 		return
 	}
 
+	// Get root and build path
 	node := tree.root
-	var path []*Node
+	node.mu.Lock()
+	tree.rootLock.Unlock()
 
-	// Acquire child lock when traversing
-	tree.childLock.Lock()
+	var path []*Node
 	for !node.isleaf {
 		path = append(path, node)
 		idx := node.findindex(key)
-		node = node.children[idx]
+		nextNode := node.children[idx]
+		nextNode.mu.Lock()
+		node = nextNode
 	}
-	tree.childLock.Unlock()
 
+	// Handle key already exists case
 	idx := node.findindex(key)
 	if idx < len(node.keys) && bytes.Equal(node.keys[idx], key) {
 		node.values[idx] = value
+		for i := 0; i < len(path); i++ {
+			path[i].mu.Unlock()
+		}
+		node.mu.Unlock()
 		return
 	}
 
+	// Simple insert if node has space
 	if len(node.keys) < MaxKeys {
 		node.insertAt(idx, key, value)
+		for i := 0; i < len(path); i++ {
+			path[i].mu.Unlock()
+		}
+		node.mu.Unlock()
 		return
 	}
 
+	// Handle splitting cases
 	midKey, midValue, newNode := tree.splitNodeWithInsert(node, key, value)
+	node.mu.Unlock()
 
-	tree.childLock.Lock()
+	// Propagate splits up the tree
 	for i := len(path) - 1; i >= 0; i-- {
 		parent := path[i]
 		childIdx := parent.findindex(midKey)
@@ -55,20 +74,73 @@ func (tree *Btree) Insert(key Keytype, value Valuetype) {
 		if len(parent.keys) < MaxKeys {
 			parent.insertAt(childIdx, midKey, midValue)
 			parent.insertChildAt(childIdx+1, newNode)
-			tree.childLock.Unlock()
+			for j := 0; j < i; j++ {
+				path[j].mu.Unlock()
+			}
+			parent.mu.Unlock()
 			return
 		}
-		parent.children = append(parent.children, newNode)
 
+		parent.children = append(parent.children, newNode)
 		midKey, midValue, newNode = tree.splitNodeWithInsert(parent, midKey, midValue)
+		if i != 0 {
+			parent.mu.Unlock()
+		}
 	}
-	tree.childLock.Unlock()
+
+	tree.rootLock.Lock()
 
 	newRoot := NewNode(false)
 	newRoot.keys = append(newRoot.keys, midKey)
 	newRoot.values = append(newRoot.values, midValue)
 	newRoot.children = append(newRoot.children, tree.root, newNode)
+
+	oldRoot := tree.root
 	tree.root = newRoot
+	tree.rootLock.Unlock()
+	if len(path) > 0 {
+		oldRoot.mu.Unlock()
+	}
+}
+
+func (tree *Btree) splitNodeWithInsert(node *Node, insertKey Keytype, insertValue Valuetype) (Keytype, Valuetype, *Node) {
+	tempKeys := make([]Keytype, 0, len(node.keys)+1)
+	tempValues := make([]Valuetype, 0, len(node.values)+1)
+
+	insertPos := node.findindex(insertKey)
+
+	tempKeys = append(tempKeys, node.keys[:insertPos]...)
+	tempKeys = append(tempKeys, insertKey)
+	tempKeys = append(tempKeys, node.keys[insertPos:]...)
+
+	tempValues = append(tempValues, node.values[:insertPos]...)
+	tempValues = append(tempValues, insertValue)
+	tempValues = append(tempValues, node.values[insertPos:]...)
+
+	mid := len(tempKeys) / 2
+
+	midKey := tempKeys[mid]
+	midValue := tempValues[mid]
+
+	newNode := NewNode(node.isleaf)
+	newNode.mu.Lock()
+
+	newNode.keys = append(newNode.keys, tempKeys[mid+1:]...)
+	newNode.values = append(newNode.values, tempValues[mid+1:]...)
+
+	if !node.isleaf {
+		tempChildren := make([]*Node, 0, len(node.children)+1)
+		tempChildren = append(tempChildren, node.children[:insertPos+1]...)
+		tempChildren = append(tempChildren, node.children[insertPos+1:]...)
+
+		newNode.children = append(newNode.children, tempChildren[mid+1:]...)
+		node.children = tempChildren[:mid+1]
+	}
+
+	node.keys = tempKeys[:mid]
+	node.values = tempValues[:mid]
+	newNode.mu.Unlock()
+	return midKey, midValue, newNode
 }
 
 func (t *Btree) Delete(key []byte) bool {
@@ -93,30 +165,40 @@ func (t *Btree) Delete(key []byte) bool {
 }
 
 func (t *Btree) Find(key []byte) ([]byte, error) {
+	t.rootLock.RLock()
 	if t.root == nil {
+		t.rootLock.RUnlock()
 		return nil, errors.New("key not found")
 	}
 
-	t.rootLock.RLock()
-	defer t.rootLock.RUnlock()
+	current := t.root
+	current.mu.RLock()
+	t.rootLock.RUnlock()
 
-	for next := t.root; next != nil; {
-		t.childLock.RLock()
-		pos := next.findindex(key)
+	for {
+		pos := current.findindex(key)
 
-		if pos < len(next.keys) && bytes.Equal(next.keys[pos], key) {
-			t.childLock.RUnlock()
-			return next.keys[pos], nil
+		if pos < len(current.keys) && bytes.Equal(current.keys[pos], key) {
+			value := current.values[pos]
+			current.mu.RUnlock()
+			return value, nil
 		}
-		if next.isleaf {
-			t.childLock.RUnlock()
+
+		if current.isleaf {
+			current.mu.RUnlock()
 			return nil, errors.New("key not found")
 		}
-		next = next.children[pos]
-		t.childLock.RUnlock()
-	}
 
-	return nil, errors.New("key not found")
+		next := current.children[pos]
+		if next == nil {
+			current.mu.RUnlock()
+			return nil, errors.New("invalid tree structure")
+		}
+
+		next.mu.RLock()
+		current.mu.RUnlock()
+		current = next
+	}
 }
 
 func (n *Node) delete(key []byte, isSeekingSuccessor bool) (Keytype, Valuetype) {
@@ -205,7 +287,7 @@ func (n *Node) fillChildAt(pos int) {
 		right.keys = right.keys[1:]
 		right.values = right.values[1:]
 
-	// Merge case
+	// Merge casee
 	default:
 		if pos >= len(n.keys) {
 			pos = len(n.keys) - 1
@@ -230,43 +312,4 @@ func (n *Node) fillChildAt(pos int) {
 		n.values = append(n.values[:pos], n.values[pos+1:]...)
 		n.children = append(n.children[:pos+1], n.children[pos+2:]...)
 	}
-}
-
-func (tree *Btree) splitNodeWithInsert(node *Node, insertKey Keytype, insertValue Valuetype) (Keytype, Valuetype, *Node) {
-
-	tempKeys := make([]Keytype, 0, len(node.keys)+1)
-	tempValues := make([]Valuetype, 0, len(node.values)+1)
-
-	insertPos := node.findindex(insertKey)
-
-	tempKeys = append(tempKeys, node.keys[:insertPos]...)
-	tempKeys = append(tempKeys, insertKey)
-	tempKeys = append(tempKeys, node.keys[insertPos:]...)
-
-	tempValues = append(tempValues, node.values[:insertPos]...)
-	tempValues = append(tempValues, insertValue)
-	tempValues = append(tempValues, node.values[insertPos:]...)
-
-	mid := len(tempKeys) / 2
-
-	midKey := tempKeys[mid]
-	midValue := tempValues[mid]
-
-	newNode := NewNode(node.isleaf)
-
-	newNode.keys = append(newNode.keys, tempKeys[mid+1:]...)
-	newNode.values = append(newNode.values, tempValues[mid+1:]...)
-
-	if !node.isleaf {
-		tempChildren := make([]*Node, 0, len(node.children)+1)
-		tempChildren = append(tempChildren, node.children[:insertPos+1]...)
-		tempChildren = append(tempChildren, node.children[insertPos+1:]...)
-
-		newNode.children = append(newNode.children, tempChildren[mid+1:]...)
-		node.children = tempChildren[:mid+1]
-	}
-
-	node.keys = tempKeys[:mid]
-	node.values = tempValues[:mid]
-	return midKey, midValue, newNode
 }

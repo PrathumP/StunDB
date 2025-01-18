@@ -1,0 +1,198 @@
+When you apply a rootlock there's no need to add node level locks since the tree can't be accessed by other goroutines anyway but doing that doesn't solve our problem of add granular locking Suggestion - Only use node level locks and the implementation detail using latch coupling/crabbing is as follows: 1. Insert - when traversing to find the key, add locks in such a way that the parent node lock is released after you lock the child node so that at any point of time only two subsequent levels are locked, the exception to this rule is when there's a possibility of split as split is recursive and can go up to the root so only release parent node lock when the child node can safely accomodate an extra node (condition - number of keys < Maxkeys). 2. Delete - Similarly for delete, add such locks only to parent and child while traversing with the exception of when there's a possibility of merge which can also propagate to the root so only release parent node lock when the the child node can safely donate its node without merging (condition - number of keys > Minkeys) 3. Find- It requires only locking the node which is to be traversed and has no other exceptions. I want you to debug this Insert function code which gives the error that "Unlock of unlocked mutex" . The code : package bptree
+
+import (
+	"bytes"
+	"sync"
+)
+
+type Keytype []byte
+type Valuetype []byte
+
+type Node struct {
+	keys     []Keytype
+	values   []Valuetype
+	children []*Node
+	isleaf   bool
+	mu       sync.RWMutex
+}
+
+const (
+	MaxKeys = 4
+	MinKeys = MaxKeys / 2
+)
+
+func (node *Node) findindex(key []byte) int {
+	length := len(node.keys)
+	for i := 0; i < length; i++ {
+		if bytes.Compare(node.keys[i], key) >= 0 {
+			return i
+		}
+	}
+	return length
+}
+
+func (node *Node) alreadyExists(key []byte) bool {
+	length := len(node.keys)
+	for i := 0; i < length; i++ {
+		if bytes.Equal(node.keys[i], key) {
+			return true
+		}
+	}
+	return false
+}
+
+func NewNode(isleaf bool) *Node {
+	return &Node{
+		keys:     make([]Keytype, 0, MaxKeys),
+		values:   make([]Valuetype, 0, MaxKeys),
+		children: make([]*Node, 0, MaxKeys+1),
+		isleaf:   isleaf,
+	}
+}
+
+func (node *Node) insertAt(index int, key Keytype, value Valuetype) {
+	node.keys = append(node.keys[:index+1], node.keys[index:]...)
+	node.keys[index] = key
+	node.values = append(node.values[:index+1], node.values[index:]...)
+	node.values[index] = value
+}
+
+func (node *Node) insertChildAt(index int, child *Node) {
+	node.children = append(node.children[:index+1], node.children[index:]...)
+	node.children[index] = child
+}
+
+func (node *Node) removeAt(index int) (Keytype, Valuetype) {
+	removedKey := node.keys[index]
+	removedValue := node.values[index]
+	node.keys = append(node.keys[:index], node.keys[index+1:]...)
+	node.values = append(node.values[:index], node.values[index+1:]...)
+	return removedKey, removedValue
+} type Btree struct {
+	root *Node
+}
+
+func (tree *Btree) Insert(key Keytype, value Valuetype) {
+	if tree.root == nil {
+		tree.root = NewNode(true)
+		tree.root.insertAt(0, key, value)
+		return
+	}
+
+	node := tree.root
+	var parent *Node
+
+	// Traverse down the tree with latch coupling
+	for !node.isleaf {
+		node.mu.Lock()
+		idx := node.findindex(key)
+		next := node.children[idx]
+		next.mu.Lock()
+
+		// Release parent lock if child has space (no split possible)
+		if len(next.keys) < MaxKeys {
+			if parent != nil {
+				parent.mu.Unlock()
+			}
+			parent = node
+		} else if parent != nil {
+			// Keep both parent and grandparent locked if split might be needed
+			parent.mu.Unlock()
+			parent = node
+		} else {
+			// First level, just keep current node as parent
+			parent = node
+		}
+		node = next
+	}
+
+	idx := node.findindex(key)
+	if idx < len(node.keys) && bytes.Equal(node.keys[idx], key) {
+		node.values[idx] = value
+		node.mu.Unlock()
+		if parent != nil {
+			parent.mu.Unlock()
+		}
+		return
+	}
+
+	if len(node.keys) < MaxKeys {
+		node.insertAt(idx, key, value)
+		node.mu.Unlock()
+		if parent != nil {
+			parent.mu.Unlock()
+		}
+		return
+	}
+
+	// Handle split case - locks are already held appropriately
+	midKey, midValue, newNode := tree.splitNodeWithInsert(node, key, value)
+
+	for parent != nil {
+		childIdx := parent.findindex(midKey)
+		if len(parent.keys) < MaxKeys {
+			parent.insertAt(childIdx, midKey, midValue)
+			parent.insertChildAt(childIdx+1, newNode)
+			node.mu.Unlock()
+			parent.mu.Unlock()
+			return
+		}
+
+		parent.children = append(parent.children, newNode)
+		oldParent := parent
+		oldNode := node
+		midKey, midValue, newNode = tree.splitNodeWithInsert(parent, midKey, midValue)
+		oldNode.mu.Unlock()
+		oldParent.mu.Unlock()
+
+		node = parent
+		parent = nil // Will need new root if we exit loop
+	}
+
+	// Need new root
+	newRoot := NewNode(false)
+	newRoot.keys = append(newRoot.keys, midKey)
+	newRoot.values = append(newRoot.values, midValue)
+	newRoot.children = append(newRoot.children, tree.root, newNode)
+	tree.root = newRoot
+	node.mu.Unlock()
+}
+
+func (tree *Btree) splitNodeWithInsert(node *Node, insertKey Keytype, insertValue Valuetype) (Keytype, Valuetype, *Node) {
+
+	tempKeys := make([]Keytype, 0, len(node.keys)+1)
+	tempValues := make([]Valuetype, 0, len(node.values)+1)
+
+	insertPos := node.findindex(insertKey)
+
+	tempKeys = append(tempKeys, node.keys[:insertPos]...)
+	tempKeys = append(tempKeys, insertKey)
+	tempKeys = append(tempKeys, node.keys[insertPos:]...)
+
+	tempValues = append(tempValues, node.values[:insertPos]...)
+	tempValues = append(tempValues, insertValue)
+	tempValues = append(tempValues, node.values[insertPos:]...)
+
+	mid := len(tempKeys) / 2
+
+	midKey := tempKeys[mid]
+	midValue := tempValues[mid]
+
+	newNode := NewNode(node.isleaf)
+
+	newNode.keys = append(newNode.keys, tempKeys[mid+1:]...)
+	newNode.values = append(newNode.values, tempValues[mid+1:]...)
+
+	if !node.isleaf {
+		tempChildren := make([]*Node, 0, len(node.children)+1)
+		tempChildren = append(tempChildren, node.children[:insertPos+1]...)
+		tempChildren = append(tempChildren, node.children[insertPos+1:]...)
+
+		newNode.children = append(newNode.children, tempChildren[mid+1:]...)
+		node.children = tempChildren[:mid+1]
+	}
+
+	node.keys = tempKeys[:mid]
+	node.values = tempValues[:mid]
+	return midKey, midValue, newNode
+}
