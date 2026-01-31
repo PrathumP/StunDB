@@ -1,0 +1,156 @@
+=== RUN   TestConcurrentInsert
+    btree_test.go:968: Before insert: key=key-0-0
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+    btree_test.go:971: After insert: key=key-0-0
+    btree_test.go:968: Before insert: key=key-1-0
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+    btree_test.go:971: After insert: key=key-1-0
+    btree_test.go:968: Before insert: key=key-0-1
+Starting insert for key: key-0-1
+    btree_test.go:968: Before insert: key=key-1-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+    btree_test.go:971: After insert: key=key-0-1
+    btree_test.go:971: After insert: key=key-1-1
+    btree_test.go:968: Before insert: key=key-1-2
+Starting insert for key: key-1-2
+Completed insert for key: key-1-2
+    btree_test.go:971: After insert: key=key-1-2
+    btree_test.go:968: Before insert: key=key-0-2
+Starting insert for key: key-0-2
+Completed insert for key: key-0-2
+    btree_test.go:971: After insert: key=key-0-2
+    btree_test.go:968: Before insert: key=key-0-3
+Starting insert for key: key-0-3
+Completed insert for key: key-0-3
+    btree_test.go:971: After insert: key=key-0-3
+    btree_test.go:968: Before insert: key=key-0-4
+Starting insert for key: key-0-4
+Completed insert for key: key-0-4
+    btree_test.go:968: Before insert: key=key-1-3
+Starting insert for key: key-1-3
+Completed insert for key: key-1-3
+    btree_test.go:971: After insert: key=key-1-3
+    btree_test.go:971: After insert: key=key-0-4
+    btree_test.go:968: Before insert: key=key-0-5
+Starting insert for key: key-0-5
+    btree_test.go:968: Before insert: key=key-1-4
+Completed insert for key: key-0-5
+Starting insert for key: key-1-4
+Completed insert for key: key-1-4
+    btree_test.go:971: After insert: key=key-0-5
+    btree_test.go:968: Before insert: key=key-0-6
+Starting insert for key: key-0-6
+Completed insert for key: key-0-6
+    btree_test.go:971: After insert: key=key-0-6
+    btree_test.go:971: After insert: key=key-1-4
+    btree_test.go:968: Before insert: key=key-0-7
+Starting insert for key: key-0-7
+Completed insert for key: key-0-7
+    btree_test.go:971: After insert: key=key-0-7
+    btree_test.go:968: Before insert: key=key-1-5
+Starting insert for key: key-1-5
+    btree_test.go:968: Before insert: key=key-0-8
+Starting insert for key: key-0-8
+Completed insert for key: key-0-8
+    btree_test.go:971: After insert: key=key-0-8
+Completed insert for key: key-1-5
+    btree_test.go:968: Before insert: key=key-0-9
+Starting insert for key: key-0-9
+Completed insert for key: key-0-9
+    btree_test.go:971: After insert: key=key-1-5
+    btree_test.go:971: After insert: key=key-0-9
+    btree_test.go:968: Before insert: key=key-1-6
+Starting insert for key: key-1-6
+Completed insert for key: key-1-6
+    btree_test.go:971: After insert: key=key-1-6
+    btree_test.go:968: Before insert: key=key-0-10
+Starting insert for key: key-0-10
+Completed insert for key: key-0-10
+    btree_test.go:968: Before insert: key=key-1-7
+Starting insert for key: key-1-7
+Completed insert for key: key-1-7
+    btree_test.go:971: After insert: key=key-0-10
+    btree_test.go:971: After insert: key=key-1-7
+    btree_test.go:968: Before insert: key=key-0-11
+Starting insert for key: key-0-11
+Completed insert for key: key-0-11
+    btree_test.go:971: After insert: key=key-0-11
+    btree_test.go:968: Before insert: key=key-1-8
+Starting insert for key: key-1-8
+panic: test timed out after 10m0s
+	running tests:
+		TestConcurrentInsert (10m0s)
+
+goroutine 9 [running]:
+testing.(*M).startAlarm.func1()
+	/nix/store/60z37432vmgkg54krwr1z057bqwp7583-go-1.25.5/share/go/src/testing/testing.go:2682 +0x605
+created by time.goFunc
+	/nix/store/60z37432vmgkg54krwr1z057bqwp7583-go-1.25.5/share/go/src/time/sleep.go:215 +0x45
+
+goroutine 1 [chan receive]:
+testing.(*T).Run(0xc0001028c0, {0x66ca48, 0x14}, 0x6779e0)
+	/nix/store/60z37432vmgkg54krwr1z057bqwp7583-go-1.25.5/share/go/src/testing/testing.go:2005 +0x9fe
+testing.runTests.func1(0xc0001028c0)
+	/nix/store/60z37432vmgkg54krwr1z057bqwp7583-go-1.25.5/share/go/src/testing/testing.go:2477 +0x86
+testing.tRunner(0xc0001028c0, 0xc000165ae0)
+	/nix/store/60z37432vmgkg54krwr1z057bqwp7583-go-1.25.5/share/go/src/testing/testing.go:1934 +0x21d
+testing.runTests(0xc000120180, {0x7f7700, 0x9, 0x9}, {0x0?, 0x4b23c5?, 0x7fcae0?})
+	/nix/store/60z37432vmgkg54krwr1z057bqwp7583-go-1.25.5/share/go/src/testing/testing.go:2475 +0x96d
+testing.(*M).Run(0xc00011e3c0)
+	/nix/store/60z37432vmgkg54krwr1z057bqwp7583-go-1.25.5/share/go/src/testing/testing.go:2337 +0xed5
+main.main()
+	_testmain.go:61 +0x165
+
+goroutine 19 [chan receive]:
+Database/bptree.TestConcurrentInsert(0xc000102a80)
+	/home/pookie/StunDB/bptree/btree_test.go:1017 +0x44c
+testing.tRunner(0xc000102a80, 0x6779e0)
+	/nix/store/60z37432vmgkg54krwr1z057bqwp7583-go-1.25.5/share/go/src/testing/testing.go:1934 +0x21d
+created by testing.(*T).Run in goroutine 1
+	/nix/store/60z37432vmgkg54krwr1z057bqwp7583-go-1.25.5/share/go/src/testing/testing.go:1997 +0x9d3
+
+goroutine 20 [chan receive]:
+Database/bptree.TestConcurrentInsert.func1(0x0)
+	/home/pookie/StunDB/bptree/btree_test.go:997 +0x5d1
+created by Database/bptree.TestConcurrentInsert in goroutine 19
+	/home/pookie/StunDB/bptree/btree_test.go:961 +0x111
+
+goroutine 21 [sync.RWMutex.Lock]:
+sync.runtime_SemacquireRWMutex(0xc00012617c?, 0x1?, 0xc0000b8040?)
+	/nix/store/60z37432vmgkg54krwr1z057bqwp7583-go-1.25.5/share/go/src/runtime/sema.go:105 +0x25
+sync.(*RWMutex).Lock(0xc000126168)
+	/nix/store/60z37432vmgkg54krwr1z057bqwp7583-go-1.25.5/share/go/src/sync/rwmutex.go:155 +0x89
+Database/bptree.(*Btree).Insert(0xc000126160, {0xc000014298, 0x7, 0x8}, {0xc0000142a8, 0x7, 0x8})
+	/home/pookie/StunDB/bptree/btree.go:91 +0x1b95
+Database/bptree.TestConcurrentInsert.func1(0x1)
+	/home/pookie/StunDB/bptree/btree_test.go:970 +0x353
+created by Database/bptree.TestConcurrentInsert in goroutine 19
+	/home/pookie/StunDB/bptree/btree_test.go:961 +0x111
+
+goroutine 22 [sync.WaitGroup.Wait]:
+sync.runtime_SemacquireWaitGroup(0xc00011a1d0?, 0x0?)
+	/nix/store/60z37432vmgkg54krwr1z057bqwp7583-go-1.25.5/share/go/src/runtime/sema.go:114 +0x2e
+sync.(*WaitGroup).Wait(0xc00011a1d0)
+	/nix/store/60z37432vmgkg54krwr1z057bqwp7583-go-1.25.5/share/go/src/sync/waitgroup.go:206 +0xd3
+Database/bptree.TestConcurrentInsert.func2()
+	/home/pookie/StunDB/bptree/btree_test.go:1011 +0x3d
+created by Database/bptree.TestConcurrentInsert in goroutine 19
+	/home/pookie/StunDB/bptree/btree_test.go:1010 +0x43d
+
+goroutine 8 [sync.RWMutex.RLock]:
+sync.runtime_SemacquireRWMutexR(0xc00019e13c?, 0x1?, 0x6055b2?)
+	/nix/store/60z37432vmgkg54krwr1z057bqwp7583-go-1.25.5/share/go/src/runtime/sema.go:100 +0x25
+sync.(*RWMutex).RLock(0xc00019e12c)
+	/nix/store/60z37432vmgkg54krwr1z057bqwp7583-go-1.25.5/share/go/src/sync/rwmutex.go:74 +0x5b
+Database/bptree.(*Btree).Find(0xc000126160, {0xc000284e98, 0x8, 0x20})
+	/home/pookie/StunDB/bptree/btree.go:177 +0xa5
+Database/bptree.TestConcurrentInsert.func1.1({0xc000014218, 0x8}, {0xc000014228, 0x8})
+	/home/pookie/StunDB/bptree/btree_test.go:983 +0x92
+created by Database/bptree.TestConcurrentInsert.func1 in goroutine 20
+	/home/pookie/StunDB/bptree/btree_test.go:982 +0x5b3
+exit status 2
+FAIL	Database/bptree	600.063s

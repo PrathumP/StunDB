@@ -3,70 +3,146 @@ package bptree
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"sync"
 )
 
+// Btree is a concurrent B+Tree implementation.
+//
+// CONCURRENCY MODEL:
+// - All write operations (Insert, Put, Delete) acquire treeLock.Lock()
+// - All read operations (Find, Get, GetRange) acquire treeLock.RLock()
+// - This ensures writes are serialized and readers see consistent state
+//
+// This approach provides:
+// - Correctness: Single lock prevents all race conditions
+// - Read concurrency: Multiple readers can proceed simultaneously
+// - Simplicity: Easy to reason about
+//
+// Tradeoff: Writes block all reads. For higher throughput, consider:
+// - Partitioning data across multiple trees
+// - Implementing full B-Link tree protocol with fine-grained locking
 type Btree struct {
 	root     *Node
-	rootLock sync.RWMutex
+	treeLock sync.RWMutex // Single lock for all operations
 }
 
+// isSafe checks if a node has space for insertion (not full)
+func (n *Node) isSafe() bool {
+	return len(n.keys) < MaxKeys
+}
+
+// getHighKey returns the highest key in the node, or nil if empty
+func (n *Node) getHighKey() Keytype {
+	if len(n.keys) == 0 {
+		return nil
+	}
+	return n.keys[len(n.keys)-1]
+}
+
+// Put performs a thread-safe insert. Alias for Insert.
+func (t *Btree) Put(key Keytype, value Valuetype) {
+	t.Insert(key, value)
+}
+
+// splitNodeSimple splits a full node and inserts a new key.
+// Called under treeLock - no per-node locking needed.
+func (t *Btree) splitNodeSimple(node *Node, insertKey Keytype, insertValue Valuetype, insertChildPos int, insertChild *Node) (Keytype, Valuetype, *Node) {
+	tempKeys := make([]Keytype, 0, len(node.keys)+1)
+	tempValues := make([]Valuetype, 0, len(node.values)+1)
+
+	insertPos := node.findindex(insertKey)
+
+	// Build temporary list with new key
+	tempKeys = append(tempKeys, node.keys[:insertPos]...)
+	tempKeys = append(tempKeys, insertKey)
+	tempKeys = append(tempKeys, node.keys[insertPos:]...)
+
+	tempValues = append(tempValues, node.values[:insertPos]...)
+	tempValues = append(tempValues, insertValue)
+	tempValues = append(tempValues, node.values[insertPos:]...)
+
+	mid := len(tempKeys) / 2
+
+	// For Pure B-Tree: median key+value is promoted
+	midKey := tempKeys[mid]
+	midValue := tempValues[mid]
+
+	newNode := NewNode(node.isleaf)
+
+	// Right node gets keys after median - copy to avoid shared backing array
+	rightKeys := tempKeys[mid+1:]
+	rightValues := tempValues[mid+1:]
+	newNode.keys = make([]Keytype, len(rightKeys), MaxKeys)
+	copy(newNode.keys, rightKeys)
+	newNode.values = make([]Valuetype, len(rightValues), MaxKeys)
+	copy(newNode.values, rightValues)
+
+	// Handle children for internal nodes
+	if !node.isleaf {
+		tempChildren := make([]*Node, 0, len(node.children)+1)
+
+		// Build temporary children list with new child
+		if insertChildPos >= 0 {
+			tempChildren = append(tempChildren, node.children[:insertChildPos]...)
+			tempChildren = append(tempChildren, insertChild)
+			tempChildren = append(tempChildren, node.children[insertChildPos:]...)
+		} else {
+			tempChildren = node.children
+		}
+
+		rightChildren := tempChildren[mid+1:]
+		newNode.children = make([]*Node, len(rightChildren), MaxKeys+1)
+		copy(newNode.children, rightChildren)
+
+		leftChildren := tempChildren[:mid+1]
+		node.children = make([]*Node, len(leftChildren), MaxKeys+1)
+		copy(node.children, leftChildren)
+	}
+
+	// Left node gets keys up to (but not including) median - copy to avoid shared backing array
+	leftKeys := tempKeys[:mid]
+	leftValues := tempValues[:mid]
+	node.keys = make([]Keytype, len(leftKeys), MaxKeys)
+	copy(node.keys, leftKeys)
+	node.values = make([]Valuetype, len(leftValues), MaxKeys)
+	copy(node.values, leftValues)
+
+	return midKey, midValue, newNode
+}
+
+// Insert inserts a key-value pair into the tree. Thread-safe.
 func (tree *Btree) Insert(key Keytype, value Valuetype) {
-	// Handle empty tree case
-	tree.rootLock.Lock()
-	fmt.Printf("Starting insert for key: %s\n", key)
-	defer fmt.Printf("Completed insert for key: %s\n", key)
+	tree.treeLock.Lock()
+	defer tree.treeLock.Unlock()
 
 	if tree.root == nil {
 		tree.root = NewNode(true)
-		tree.root.mu.Lock()
 		tree.root.insertAt(0, key, value)
-		tree.root.mu.Unlock()
-		tree.rootLock.Unlock()
 		return
 	}
 
-	// Get root and build path
 	node := tree.root
-	node.mu.Lock()
-	tree.rootLock.Unlock()
-
 	var path []*Node
 	for !node.isleaf {
 		path = append(path, node)
 		idx := node.findindex(key)
-		nextNode := node.children[idx]
-		nextNode.mu.Lock()
-		node = nextNode
+		node = node.children[idx]
 	}
 
-	// Handle key already exists case
 	idx := node.findindex(key)
 	if idx < len(node.keys) && bytes.Equal(node.keys[idx], key) {
 		node.values[idx] = value
-		for i := 0; i < len(path); i++ {
-			path[i].mu.Unlock()
-		}
-		node.mu.Unlock()
 		return
 	}
 
-	// Simple insert if node has space
 	if len(node.keys) < MaxKeys {
 		node.insertAt(idx, key, value)
-		for i := 0; i < len(path); i++ {
-			path[i].mu.Unlock()
-		}
-		node.mu.Unlock()
 		return
 	}
 
-	// Handle splitting cases
-	midKey, midValue, newNode := tree.splitNodeWithInsert(node, key, value)
-	node.mu.Unlock()
+	// Split logic
+	midKey, midValue, newNode := tree.splitNodeSimple(node, key, value, -1, nil)
 
-	// Propagate splits up the tree
 	for i := len(path) - 1; i >= 0; i-- {
 		parent := path[i]
 		childIdx := parent.findindex(midKey)
@@ -74,36 +150,21 @@ func (tree *Btree) Insert(key Keytype, value Valuetype) {
 		if len(parent.keys) < MaxKeys {
 			parent.insertAt(childIdx, midKey, midValue)
 			parent.insertChildAt(childIdx+1, newNode)
-			for j := 0; j < i; j++ {
-				path[j].mu.Unlock()
-			}
-			parent.mu.Unlock()
 			return
 		}
 
-		parent.children = append(parent.children, newNode)
-		midKey, midValue, newNode = tree.splitNodeWithInsert(parent, midKey, midValue)
-		if i != 0 {
-			parent.mu.Unlock()
-		}
+		midKey, midValue, newNode = tree.splitNodeSimple(parent, midKey, midValue, childIdx+1, newNode)
 	}
 
-	tree.rootLock.Lock()
-
+	// Need new root
 	newRoot := NewNode(false)
 	newRoot.keys = append(newRoot.keys, midKey)
 	newRoot.values = append(newRoot.values, midValue)
 	newRoot.children = append(newRoot.children, tree.root, newNode)
-
-	oldRoot := tree.root
 	tree.root = newRoot
-	tree.rootLock.Unlock()
-	if len(path) > 0 {
-		oldRoot.mu.Unlock()
-	}
 }
 
-func (tree *Btree) splitNodeWithInsert(node *Node, insertKey Keytype, insertValue Valuetype) (Keytype, Valuetype, *Node) {
+func (tree *Btree) splitNodeWithInsert(node *Node, insertKey Keytype, insertValue Valuetype, insertChildPos int, insertChild *Node) (Keytype, Valuetype, *Node) {
 	tempKeys := make([]Keytype, 0, len(node.keys)+1)
 	tempValues := make([]Valuetype, 0, len(node.values)+1)
 
@@ -130,8 +191,10 @@ func (tree *Btree) splitNodeWithInsert(node *Node, insertKey Keytype, insertValu
 
 	if !node.isleaf {
 		tempChildren := make([]*Node, 0, len(node.children)+1)
-		tempChildren = append(tempChildren, node.children[:insertPos+1]...)
-		tempChildren = append(tempChildren, node.children[insertPos+1:]...)
+
+		tempChildren = append(tempChildren, node.children[:insertChildPos]...)
+		tempChildren = append(tempChildren, insertChild)
+		tempChildren = append(tempChildren, node.children[insertChildPos:]...)
 
 		newNode.children = append(newNode.children, tempChildren[mid+1:]...)
 		node.children = tempChildren[:mid+1]
@@ -139,24 +202,27 @@ func (tree *Btree) splitNodeWithInsert(node *Node, insertKey Keytype, insertValu
 
 	node.keys = tempKeys[:mid]
 	node.values = tempValues[:mid]
-	newNode.mu.Unlock()
+	if newNode != nil {
+		newNode.mu.Unlock()
+	}
 	return midKey, midValue, newNode
 }
 
+// Delete removes a key from the tree. Thread-safe.
 func (t *Btree) Delete(key []byte) bool {
+	t.treeLock.Lock()
+	defer t.treeLock.Unlock()
+
 	if t.root == nil {
 		return false
 	}
-
-	t.rootLock.Lock()
-	defer t.rootLock.Unlock()
 
 	deletedkey, _ := t.root.delete(key, false)
 
 	if len(t.root.keys) == 0 {
 		if t.root.isleaf {
 			t.root = nil
-		} else {
+		} else if len(t.root.children) > 0 {
 			t.root = t.root.children[0]
 		}
 	}
@@ -164,41 +230,46 @@ func (t *Btree) Delete(key []byte) bool {
 	return deletedkey != nil
 }
 
+// Find searches for a key in the tree. Thread-safe.
 func (t *Btree) Find(key []byte) ([]byte, error) {
-	t.rootLock.RLock()
+	t.treeLock.RLock()
+	defer t.treeLock.RUnlock()
+
 	if t.root == nil {
-		t.rootLock.RUnlock()
 		return nil, errors.New("key not found")
 	}
 
 	current := t.root
-	current.mu.RLock()
-	t.rootLock.RUnlock()
-
 	for {
 		pos := current.findindex(key)
 
 		if pos < len(current.keys) && bytes.Equal(current.keys[pos], key) {
-			value := current.values[pos]
-			current.mu.RUnlock()
-			return value, nil
+			// Make a copy of the value to return
+			valueCopy := make([]byte, len(current.values[pos]))
+			copy(valueCopy, current.values[pos])
+			return valueCopy, nil
 		}
 
 		if current.isleaf {
-			current.mu.RUnlock()
 			return nil, errors.New("key not found")
+		}
+
+		if pos >= len(current.children) {
+			return nil, errors.New("invalid tree structure")
 		}
 
 		next := current.children[pos]
 		if next == nil {
-			current.mu.RUnlock()
 			return nil, errors.New("invalid tree structure")
 		}
 
-		next.mu.RLock()
-		current.mu.RUnlock()
 		current = next
 	}
+}
+
+// Get is an alias for Find.
+func (t *Btree) Get(key []byte) ([]byte, error) {
+	return t.Find(key)
 }
 
 func (n *Node) delete(key []byte, isSeekingSuccessor bool) (Keytype, Valuetype) {
@@ -209,7 +280,7 @@ func (n *Node) delete(key []byte, isSeekingSuccessor bool) (Keytype, Valuetype) 
 	}
 
 	found := false
-	if pos < len(n.keys) && bytes.Compare(n.keys[pos], key) == 0 {
+	if pos < len(n.keys) && bytes.Equal(n.keys[pos], key) {
 		found = true
 	}
 

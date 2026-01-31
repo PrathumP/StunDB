@@ -1,0 +1,1307 @@
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+Starting insert for key: key-2-0
+Completed insert for key: key-2-0
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-2-1
+Completed insert for key: key-2-1
+Starting insert for key: key-2-2
+Completed insert for key: key-2-2
+Starting insert for key: key-2-3
+Completed insert for key: key-2-3
+Starting insert for key: key-1-2
+Completed insert for key: key-1-2
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-3
+Completed insert for key: key-1-3
+Starting insert for key: key-0-2
+Completed insert for key: key-0-2
+Starting insert for key: key-0-3
+Completed insert for key: key-0-3
+Starting insert for key: key-0-4
+Completed insert for key: key-0-4
+Starting insert for key: key-0-5
+Completed insert for key: key-0-5
+Starting insert for key: key-0-6
+Completed insert for key: key-0-6
+Starting insert for key: key-2-4
+Completed insert for key: key-2-4
+Starting insert for key: key-0-7
+Completed insert for key: key-0-7
+Starting insert for key: key-0-8
+Completed insert for key: key-0-8
+Starting insert for key: key-0-9
+Starting insert for key: key-2-5
+signal: interrupt
+FAIL	Database/bptree	8.405s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+Starting insert for key: key-2-0
+Completed insert for key: key-2-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-2-1
+Completed insert for key: key-2-1
+Starting insert for key: key-2-2
+Completed insert for key: key-2-2
+Starting insert for key: key-0-2
+Completed insert for key: key-0-2
+Starting insert for key: key-1-2
+Completed insert for key: key-1-2
+Starting insert for key: key-0-3
+Completed insert for key: key-0-3
+Starting insert for key: key-0-4
+Completed insert for key: key-0-4
+Starting insert for key: key-0-5
+Completed insert for key: key-0-5
+Starting insert for key: key-2-3
+Completed insert for key: key-2-3
+Starting insert for key: key-1-3
+Completed insert for key: key-1-3
+Starting insert for key: key-2-4
+Completed insert for key: key-2-4
+Starting insert for key: key-2-5
+Completed insert for key: key-2-5
+Starting insert for key: key-2-6
+Completed insert for key: key-2-6
+Starting insert for key: key-1-4
+Completed insert for key: key-1-4
+Starting insert for key: key-1-5
+Completed insert for key: key-1-5
+Starting insert for key: key-2-7
+Completed insert for key: key-2-7
+Starting insert for key: key-0-6
+Completed insert for key: key-0-6
+Starting insert for key: key-2-8
+Completed insert for key: key-2-8
+Starting insert for key: key-1-6
+Completed insert for key: key-1-6
+Starting insert for key: key-1-7
+Completed insert for key: key-1-7
+Starting insert for key: key-1-8
+Completed insert for key: key-1-8
+Starting insert for key: key-2-9
+Completed insert for key: key-2-9
+Starting insert for key: key-2-10
+Completed insert for key: key-2-10
+Starting insert for key: key-0-7
+Completed insert for key: key-0-7
+Starting insert for key: key-0-8
+Completed insert for key: key-0-8
+Starting insert for key: key-1-9
+Completed insert for key: key-1-9
+Starting insert for key: key-1-10
+Completed insert for key: key-1-10
+Starting insert for key: key-0-9
+Completed insert for key: key-0-9
+Starting insert for key: key-0-10
+Completed insert for key: key-0-10
+--- FAIL: TestConcurrentInsert (0.00s)
+    btree_test.go:968: Before insert: key=key-0-0
+    btree_test.go:968: Before insert: key=key-1-0
+    btree_test.go:971: After insert: key=key-1-0
+    btree_test.go:968: Before insert: key=key-1-1
+    btree_test.go:971: After insert: key=key-0-0
+    btree_test.go:968: Before insert: key=key-2-0
+    btree_test.go:971: After insert: key=key-2-0
+    btree_test.go:968: Before insert: key=key-0-1
+    btree_test.go:968: Before insert: key=key-2-1
+    btree_test.go:971: After insert: key=key-1-1
+    btree_test.go:968: Before insert: key=key-1-2
+    btree_test.go:971: After insert: key=key-0-1
+    btree_test.go:971: After insert: key=key-2-1
+    btree_test.go:968: Before insert: key=key-2-2
+    btree_test.go:968: Before insert: key=key-0-2
+    btree_test.go:971: After insert: key=key-0-2
+    btree_test.go:971: After insert: key=key-2-2
+    btree_test.go:968: Before insert: key=key-0-3
+    btree_test.go:971: After insert: key=key-0-3
+    btree_test.go:968: Before insert: key=key-0-4
+    btree_test.go:971: After insert: key=key-1-2
+    btree_test.go:971: After insert: key=key-0-4
+    btree_test.go:968: Before insert: key=key-0-5
+    btree_test.go:968: Before insert: key=key-2-3
+    btree_test.go:968: Before insert: key=key-1-3
+    btree_test.go:971: After insert: key=key-2-3
+    btree_test.go:971: After insert: key=key-1-3
+    btree_test.go:968: Before insert: key=key-2-4
+    btree_test.go:971: After insert: key=key-2-4
+    btree_test.go:968: Before insert: key=key-2-5
+    btree_test.go:971: After insert: key=key-2-5
+    btree_test.go:968: Before insert: key=key-2-6
+    btree_test.go:971: After insert: key=key-0-5
+    btree_test.go:968: Before insert: key=key-1-4
+    btree_test.go:968: Before insert: key=key-0-6
+    btree_test.go:971: After insert: key=key-2-6
+    btree_test.go:971: After insert: key=key-1-4
+    btree_test.go:968: Before insert: key=key-1-5
+    btree_test.go:968: Before insert: key=key-2-7
+    btree_test.go:971: After insert: key=key-1-5
+    btree_test.go:971: After insert: key=key-2-7
+    btree_test.go:968: Before insert: key=key-2-8
+    btree_test.go:968: Before insert: key=key-1-6
+    btree_test.go:971: After insert: key=key-0-6
+    btree_test.go:971: After insert: key=key-2-8
+    btree_test.go:971: After insert: key=key-1-6
+    btree_test.go:968: Before insert: key=key-1-7
+    btree_test.go:968: Before insert: key=key-2-9
+    btree_test.go:968: Before insert: key=key-0-7
+    btree_test.go:971: After insert: key=key-1-7
+    btree_test.go:968: Before insert: key=key-1-8
+    btree_test.go:971: After insert: key=key-1-8
+    btree_test.go:971: After insert: key=key-2-9
+    btree_test.go:968: Before insert: key=key-2-10
+    btree_test.go:968: Before insert: key=key-1-9
+    btree_test.go:971: After insert: key=key-2-10
+    btree_test.go:971: After insert: key=key-0-7
+    btree_test.go:968: Before insert: key=key-0-8
+    btree_test.go:971: After insert: key=key-0-8
+    btree_test.go:971: After insert: key=key-1-9
+    btree_test.go:968: Before insert: key=key-1-10
+    btree_test.go:968: Before insert: key=key-0-9
+    btree_test.go:971: After insert: key=key-1-10
+    btree_test.go:971: After insert: key=key-0-9
+    btree_test.go:968: Before insert: key=key-0-10
+    btree_test.go:971: After insert: key=key-0-10
+    btree_test.go:1025: immediate verification failed for key key-1-1: key not found
+    btree_test.go:1025: immediate verification failed for key key-1-5: key not found
+    btree_test.go:1046: Final verification: key key-1-4 not found: key not found
+    btree_test.go:1049: Final verification: value mismatch for key key-1-4, got , want key-1-4
+    btree_test.go:1046: Final verification: key key-1-5 not found: key not found
+    btree_test.go:1049: Final verification: value mismatch for key key-1-5, got , want key-1-5
+    btree_test.go:1046: Final verification: key key-2-1 not found: key not found
+    btree_test.go:1049: Final verification: value mismatch for key key-2-1, got , want key-2-1
+    btree_test.go:1046: Final verification: key key-2-2 not found: key not found
+    btree_test.go:1049: Final verification: value mismatch for key key-2-2, got , want key-2-2
+    btree_test.go:1046: Final verification: key key-2-4 not found: key not found
+    btree_test.go:1049: Final verification: value mismatch for key key-2-4, got , want key-2-4
+    btree_test.go:1046: Final verification: key key-2-5 not found: key not found
+    btree_test.go:1049: Final verification: value mismatch for key key-2-5, got , want key-2-5
+    btree_test.go:1046: Final verification: key key-2-6 not found: key not found
+    btree_test.go:1049: Final verification: value mismatch for key key-2-6, got , want key-2-6
+    btree_test.go:1060: Test completed in 1.469448ms
+FAIL
+exit status 1
+FAIL	Database/bptree	0.003s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+Starting insert for key: key-0-1
+Starting insert for key: key-1-2
+Completed insert for key: key-1-2
+Completed insert for key: key-0-1
+Starting insert for key: key-2-0
+Completed insert for key: key-2-0
+Starting insert for key: key-2-1
+Completed insert for key: key-2-1
+Starting insert for key: key-2-2
+Completed insert for key: key-2-2
+Starting insert for key: key-2-3
+Completed insert for key: key-2-3
+Starting insert for key: key-2-4
+Completed insert for key: key-2-4
+Starting insert for key: key-0-2
+Completed insert for key: key-0-2
+Starting insert for key: key-0-3
+Completed insert for key: key-0-3
+Starting insert for key: key-0-4
+Completed insert for key: key-0-4
+Starting insert for key: key-0-5
+Completed insert for key: key-0-5
+Starting insert for key: key-0-6
+Completed insert for key: key-0-6
+Starting insert for key: key-0-7
+Completed insert for key: key-0-7
+Starting insert for key: key-0-8
+Completed insert for key: key-0-8
+Starting insert for key: key-2-5
+panic: test timed out after 10m0s
+	running tests:
+		TestConcurrentInsert (10m0s)
+
+goroutine 28 [running]:
+testing.(*M).startAlarm.func1()
+	/nix/store/60z37432vmgkg54krwr1z057bqwp7583-go-1.25.5/share/go/src/testing/testing.go:2682 +0x345
+created by time.goFunc
+	/nix/store/60z37432vmgkg54krwr1z057bqwp7583-go-1.25.5/share/go/src/time/sleep.go:215 +0x2d
+
+goroutine 1 [chan receive]:
+testing.(*T).Run(0xc000102540, {0x59bc1b?, 0xc000120b30?}, 0x5a69c8)
+	/nix/store/60z37432vmgkg54krwr1z057bqwp7583-go-1.25.5/share/go/src/testing/testing.go:2005 +0x485
+testing.runTests.func1(0xc000102540)
+	/nix/store/60z37432vmgkg54krwr1z057bqwp7583-go-1.25.5/share/go/src/testing/testing.go:2477 +0x37
+testing.tRunner(0xc000102540, 0xc000120c70)
+	/nix/store/60z37432vmgkg54krwr1z057bqwp7583-go-1.25.5/share/go/src/testing/testing.go:1934 +0xea
+testing.runTests(0xc000126180, {0x6e80e0, 0x9, 0x9}, {0x7?, 0xc00013a8c0?, 0x6ed540?})
+	/nix/store/60z37432vmgkg54krwr1z057bqwp7583-go-1.25.5/share/go/src/testing/testing.go:2475 +0x4b4
+testing.(*M).Run(0xc000124460)
+	/nix/store/60z37432vmgkg54krwr1z057bqwp7583-go-1.25.5/share/go/src/testing/testing.go:2337 +0x63a
+main.main()
+	_testmain.go:61 +0x9b
+
+goroutine 18 [sync.RWMutex.RLock]:
+sync.runtime_SemacquireRWMutexR(0xc0001381c0?, 0xd4?, 0xc000121ea0?)
+	/nix/store/60z37432vmgkg54krwr1z057bqwp7583-go-1.25.5/share/go/src/runtime/sema.go:100 +0x25
+sync.(*RWMutex).RLock(...)
+	/nix/store/60z37432vmgkg54krwr1z057bqwp7583-go-1.25.5/share/go/src/sync/rwmutex.go:74
+Database/bptree.(*Btree).debugPrint(0xc00012c160)
+	/home/pookie/StunDB/bptree/btree_test.go:1127 +0x65
+Database/bptree.TestConcurrentInsert(0xc000102700)
+	/home/pookie/StunDB/bptree/btree_test.go:1029 +0x2c8
+testing.tRunner(0xc000102700, 0x5a69c8)
+	/nix/store/60z37432vmgkg54krwr1z057bqwp7583-go-1.25.5/share/go/src/testing/testing.go:1934 +0xea
+created by testing.(*T).Run in goroutine 1
+	/nix/store/60z37432vmgkg54krwr1z057bqwp7583-go-1.25.5/share/go/src/testing/testing.go:1997 +0x465
+
+goroutine 19 [sync.Mutex.Lock]:
+internal/sync.runtime_SemacquireMutex(0xc00011cc10?, 0x5?, 0xc000102700?)
+	/nix/store/60z37432vmgkg54krwr1z057bqwp7583-go-1.25.5/share/go/src/runtime/sema.go:95 +0x25
+internal/sync.(*Mutex).lockSlow(0xc00012c168)
+	/nix/store/60z37432vmgkg54krwr1z057bqwp7583-go-1.25.5/share/go/src/internal/sync/mutex.go:149 +0x15d
+internal/sync.(*Mutex).Lock(...)
+	/nix/store/60z37432vmgkg54krwr1z057bqwp7583-go-1.25.5/share/go/src/internal/sync/mutex.go:70
+sync.(*Mutex).Lock(...)
+	/nix/store/60z37432vmgkg54krwr1z057bqwp7583-go-1.25.5/share/go/src/sync/mutex.go:46
+sync.(*RWMutex).Lock(0x7f5811784f30?)
+	/nix/store/60z37432vmgkg54krwr1z057bqwp7583-go-1.25.5/share/go/src/sync/rwmutex.go:150 +0x32
+Database/bptree.(*Btree).Insert(0xc00012c160, {0xc0002820c0, 0x7, 0x8}, {0xc0002820c8, 0x7, 0x8})
+	/home/pookie/StunDB/bptree/btree.go:17 +0x77
+Database/bptree.TestConcurrentInsert.func1(0x0)
+	/home/pookie/StunDB/bptree/btree_test.go:970 +0x2a7
+created by Database/bptree.TestConcurrentInsert in goroutine 18
+	/home/pookie/StunDB/bptree/btree_test.go:961 +0x9c
+
+goroutine 20 [sync.Mutex.Lock]:
+internal/sync.runtime_SemacquireMutex(0xc000122c10?, 0x5?, 0xc000102700?)
+	/nix/store/60z37432vmgkg54krwr1z057bqwp7583-go-1.25.5/share/go/src/runtime/sema.go:95 +0x25
+internal/sync.(*Mutex).lockSlow(0xc00012c168)
+	/nix/store/60z37432vmgkg54krwr1z057bqwp7583-go-1.25.5/share/go/src/internal/sync/mutex.go:149 +0x15d
+internal/sync.(*Mutex).Lock(...)
+	/nix/store/60z37432vmgkg54krwr1z057bqwp7583-go-1.25.5/share/go/src/internal/sync/mutex.go:70
+sync.(*Mutex).Lock(...)
+	/nix/store/60z37432vmgkg54krwr1z057bqwp7583-go-1.25.5/share/go/src/sync/mutex.go:46
+sync.(*RWMutex).Lock(0x7f5811784a78?)
+	/nix/store/60z37432vmgkg54krwr1z057bqwp7583-go-1.25.5/share/go/src/sync/rwmutex.go:150 +0x32
+Database/bptree.(*Btree).Insert(0xc00012c160, {0xc000208090, 0x7, 0x8}, {0xc000208098, 0x7, 0x8})
+	/home/pookie/StunDB/bptree/btree.go:17 +0x77
+Database/bptree.TestConcurrentInsert.func1(0x1)
+	/home/pookie/StunDB/bptree/btree_test.go:970 +0x2a7
+created by Database/bptree.TestConcurrentInsert in goroutine 18
+	/home/pookie/StunDB/bptree/btree_test.go:961 +0x9c
+
+goroutine 21 [sync.RWMutex.Lock]:
+sync.runtime_SemacquireRWMutex(0xc000138540?, 0x48?, 0xc000138540?)
+	/nix/store/60z37432vmgkg54krwr1z057bqwp7583-go-1.25.5/share/go/src/runtime/sema.go:105 +0x25
+sync.(*RWMutex).Lock(0xc000290180?)
+	/nix/store/60z37432vmgkg54krwr1z057bqwp7583-go-1.25.5/share/go/src/sync/rwmutex.go:155 +0x6b
+Database/bptree.(*Btree).Insert(0xc00012c160, {0xc0001181f8, 0x7, 0x8}, {0xc000118200, 0x7, 0x8})
+	/home/pookie/StunDB/bptree/btree.go:91 +0x1312
+Database/bptree.TestConcurrentInsert.func1(0x2)
+	/home/pookie/StunDB/bptree/btree_test.go:970 +0x2a7
+created by Database/bptree.TestConcurrentInsert in goroutine 18
+	/home/pookie/StunDB/bptree/btree_test.go:961 +0x9c
+
+goroutine 22 [sync.WaitGroup.Wait]:
+sync.runtime_SemacquireWaitGroup(0x0?, 0x0?)
+	/nix/store/60z37432vmgkg54krwr1z057bqwp7583-go-1.25.5/share/go/src/runtime/sema.go:114 +0x2e
+sync.(*WaitGroup).Wait(0xc0001180f0)
+	/nix/store/60z37432vmgkg54krwr1z057bqwp7583-go-1.25.5/share/go/src/sync/waitgroup.go:206 +0x85
+Database/bptree.TestConcurrentInsert.func2()
+	/home/pookie/StunDB/bptree/btree_test.go:1011 +0x29
+created by Database/bptree.TestConcurrentInsert in goroutine 18
+	/home/pookie/StunDB/bptree/btree_test.go:1010 +0x23f
+
+goroutine 11 [sync.RWMutex.RLock]:
+sync.runtime_SemacquireRWMutexR(0xc0000d07d8?, 0xd8?, 0x40f3e0?)
+	/nix/store/60z37432vmgkg54krwr1z057bqwp7583-go-1.25.5/share/go/src/runtime/sema.go:100 +0x25
+sync.(*RWMutex).RLock(...)
+	/nix/store/60z37432vmgkg54krwr1z057bqwp7583-go-1.25.5/share/go/src/sync/rwmutex.go:74
+Database/bptree.(*Btree).Find(0xc00012c160, {0xc0000876d8, 0x7, 0x20})
+	/home/pookie/StunDB/bptree/btree.go:177 +0x88
+Database/bptree.TestConcurrentInsert.func1.1({0xc000012268, 0x7}, {0xc000012270, 0x7})
+	/home/pookie/StunDB/bptree/btree_test.go:983 +0x78
+created by Database/bptree.TestConcurrentInsert.func1 in goroutine 19
+	/home/pookie/StunDB/bptree/btree_test.go:982 +0x4df
+exit status 2
+FAIL	Database/bptree	600.073s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.003s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.002s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.003s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.003s
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+PASS
+ok  	Database/bptree	0.002s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.003s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.003s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.003s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.003s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+PASS
+ok  	Database/bptree	0.004s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.003s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.003s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.003s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+PASS
+ok  	Database/bptree	0.004s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+PASS
+ok  	Database/bptree	0.003s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.004s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.003s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.002s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.002s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.003s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.004s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+PASS
+ok  	Database/bptree	0.003s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.003s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+PASS
+ok  	Database/bptree	0.003s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+PASS
+ok  	Database/bptree	0.003s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.003s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.002s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.002s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.003s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.004s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+PASS
+ok  	Database/bptree	0.003s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.003s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.003s
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+PASS
+ok  	Database/bptree	0.003s
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.002s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.003s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+PASS
+ok  	Database/bptree	0.003s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.003s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.003s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.002s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.002s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.002s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.003s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.003s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.006s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.004s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+PASS
+ok  	Database/bptree	0.003s
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+PASS
+ok  	Database/bptree	0.002s
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.003s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+PASS
+ok  	Database/bptree	0.003s
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.002s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.003s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.002s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.003s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+PASS
+ok  	Database/bptree	0.002s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+PASS
+ok  	Database/bptree	0.003s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+PASS
+ok  	Database/bptree	0.003s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.003s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.003s
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+PASS
+ok  	Database/bptree	0.004s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.003s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+PASS
+ok  	Database/bptree	0.002s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+PASS
+ok  	Database/bptree	0.003s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.002s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.003s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+PASS
+ok  	Database/bptree	0.003s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.003s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+PASS
+ok  	Database/bptree	0.003s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.002s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.003s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.004s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+PASS
+ok  	Database/bptree	0.003s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+PASS
+ok  	Database/bptree	0.003s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+PASS
+ok  	Database/bptree	0.002s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.003s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.003s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.003s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.002s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.002s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.003s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.004s
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.003s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.002s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.003s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.003s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.003s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.003s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.003s
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.002s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.002s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.003s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.002s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.002s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.003s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+PASS
+ok  	Database/bptree	0.003s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.002s
+Starting insert for key: key-0-0
+Completed insert for key: key-0-0
+Starting insert for key: key-1-0
+Completed insert for key: key-1-0
+Starting insert for key: key-0-1
+Completed insert for key: key-0-1
+Starting insert for key: key-1-1
+Completed insert for key: key-1-1
+PASS
+ok  	Database/bptree	0.003s

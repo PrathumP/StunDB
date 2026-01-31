@@ -9,11 +9,12 @@ type Keytype []byte
 type Valuetype []byte
 
 type Node struct {
-	keys     []Keytype
-	values   []Valuetype
-	children []*Node
-	isleaf   bool
-	mu       sync.RWMutex
+	keys         []Keytype
+	values       []Valuetype
+	children     []*Node
+	isleaf       bool
+	mu           sync.RWMutex
+	rightSibling *Node
 }
 
 const (
@@ -51,14 +52,23 @@ func NewNode(isleaf bool) *Node {
 }
 
 func (node *Node) insertAt(index int, key Keytype, value Valuetype) {
-	node.keys = append(node.keys[:index+1], node.keys[index:]...)
+	// Grow slices by appending a zero value first
+	node.keys = append(node.keys, nil)
+	node.values = append(node.values, nil)
+	// Shift elements right
+	copy(node.keys[index+1:], node.keys[index:len(node.keys)-1])
+	copy(node.values[index+1:], node.values[index:len(node.values)-1])
+	// Insert at index
 	node.keys[index] = key
-	node.values = append(node.values[:index+1], node.values[index:]...)
 	node.values[index] = value
 }
 
 func (node *Node) insertChildAt(index int, child *Node) {
-	node.children = append(node.children[:index+1], node.children[index:]...)
+	// Grow slice by appending nil first
+	node.children = append(node.children, nil)
+	// Shift elements right
+	copy(node.children[index+1:], node.children[index:len(node.children)-1])
+	// Insert at index
 	node.children[index] = child
 }
 
