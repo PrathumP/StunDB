@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Porting bbtree to Go</title>
+<style>
+:root {
+	--bg: #ffffff; --fg: #1b1f24; --muted: #5b6572; --rule: #dde2e8;
+	--accent: #2346c8; --code-bg: #f2f4f7;
+	--seg-hdr: #3b4554; --seg-ik: #2346c8; --seg-nxt: #9aa4b2; --seg-key: #2b8a7e; --seg-val: #c9852a; --seg-slk: #dde2e8;
+	color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+	:root {
+		--bg: #111418; --fg: #e3e7ed; --muted: #98a2b0; --rule: #2a3039;
+		--accent: #8ea4ff; --code-bg: #181d24;
+		--seg-hdr: #b8c1cd; --seg-ik: #7f97ff; --seg-nxt: #5d6876; --seg-key: #4cb3a5; --seg-val: #e0a14d; --seg-slk: #2a3039;
+		color-scheme: dark;
+	}
+}
+* { box-sizing: border-box; }
+body {
+	margin: 0; background: var(--bg); color: var(--fg);
+	font: 17px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+	padding: 40px 16px 80px;
+}
+main { max-width: 72ch; margin: 0 auto; }
+h1 { font-size: 2.2em; line-height: 1.15; margin: 0 0 8px; }
+.dek { color: var(--muted); font-style: italic; margin: 0 0 32px; }
+h2 { font-size: 1.4em; line-height: 1.25; margin: 2em 0 0.6em; padding-top: 0.6em; border-top: 1px solid var(--rule); }
+a { color: var(--accent); }
+code { font: 0.86em ui-monospace, "SF Mono", Menlo, Consolas, monospace; background: var(--code-bg); padding: 0.1em 0.3em; border-radius: 3px; overflow-wrap: anywhere; }
+figure { margin: 1.5em 0; }
+figure.code { background: var(--code-bg); border: 1px solid var(--rule); border-radius: 6px; }
+figure.code figcaption { font-size: 12px; color: var(--muted); padding: 6px 14px; border-bottom: 1px solid var(--rule); }
+figure.code pre { margin: 0; padding: 14px; overflow-x: auto; tab-size: 4; }
+figure.code pre code { background: none; padding: 0; font-size: 13.5px; line-height: 1.55; overflow-wrap: normal; }
+.c { color: var(--muted); }
+.table { overflow-x: auto; margin: 1.5em 0; }
+table { border-collapse: collapse; font-size: 14.5px; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 7px 12px; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+th { color: var(--muted); font-weight: 600; }
+li { margin-bottom: 0.4em; }
+nav ol { padding-left: 1.4em; }
+figure.leafmap { border: 1px solid var(--rule); border-radius: 6px; padding: 16px; }
+figure.leafmap figcaption { display: grid; gap: 2px; margin-bottom: 12px; }
+.fig-title { font-weight: 600; }
+.fig-note { font-size: 14px; color: var(--muted); }
+.lines { display: grid; gap: 3px; }
+.line { display: grid; grid-template-columns: 4.2ch 1fr; gap: 8px; align-items: center; }
+.off { font: 11px ui-monospace, Menlo, Consolas, monospace; color: var(--muted); text-align: right; white-space: pre; }
+.bar { display: flex; height: 14px; gap: 1px; outline: 2px solid transparent; outline-offset: 2px; }
+.line.hot .bar { outline-color: var(--accent); }
+.seg, .sw { display: block; }
+.hdr { background: var(--seg-hdr); } .ik { background: var(--seg-ik); } .nxt { background: var(--seg-nxt); }
+.key { background: var(--seg-key); } .val { background: var(--seg-val); }
+.slk { background: repeating-linear-gradient(135deg, var(--seg-slk) 0 3px, transparent 3px 6px); border: 1px solid var(--seg-slk); }
+.legend { list-style: none; padding: 0; margin: 14px 0 0; display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 14px; color: var(--muted); }
+.legend li { display: flex; align-items: center; gap: 6px; margin: 0; }
+.sw { width: 12px; height: 12px; flex: none; }
+</style>
+</head>
+<body>
+<main>
+<h1>Porting bbtree to Go</h1>
+<p class="dek">How StunDB's B+-tree went from 3,752 ns to 380 ns a lookup, and what Go made easy and hard along the way.</p>
+<nav aria-label="Contents">
+<strong>Contents</strong>
+<ol>
+<li><a href="#the-starting-point-was-ten-levels-of-pointer-chasing">The starting point was ten levels of pointer chasing</a></li>
+<li><a href="#the-post-ranks-costs-and-the-ranking-decides-everything">The post ranks costs, and the ranking decides everything</a></li>
+<li><a href="#delete-before-building">Delete before building</a></li>
+<li><a href="#node-layout-comes-first">Node layout comes first</a></li>
+<li><a href="#inline-keys-keep-a-search-inside-two-cache-lines">Inline keys keep a search inside two cache lines</a></li>
+<li><a href="#a-node-search-is-a-count-not-a-binary-search">A node search is a count, not a binary search</a></li>
+<li><a href="#readers-that-write-nothing">Readers that write nothing</a></li>
+<li><a href="#batches-without-async">Batches without async</a></li>
+<li><a href="#scans-copy-leaves-out">Scans copy leaves out</a></li>
+<li><a href="#testing-a-tree-whose-reads-are-races">Testing a tree whose reads are races</a></li>
+<li><a href="#the-benchmark-harness-had-bugs-too">The benchmark harness had bugs too</a></li>
+<li><a href="#results">Results</a></li>
+<li><a href="#why-380-ns-and-not-109">Why 380 ns and not 109</a></li>
+<li><a href="#where-the-port-falls-short">Where the port falls short</a></li>
+<li><a href="#what-carried-over-and-what-didn-t">What carried over and what didn't</a></li>
+<li><a href="#reproduce-the-numbers">Reproduce the numbers</a></li>
+</ol>
+</nav>
+<p><em>How StunDB's B+-tree went from 3,752 ns to 380 ns a lookup, and what Go made easy and hard along the way.</em></p>
+<p>StunDB is a small in-memory key-value store in Go, with a write-ahead log and secondary indexes. Until this rewrite its core was a textbook B+-tree behind one lock. Xiangpeng Hao's post <a href="https://bbtree.xiangpeng.systems/post/"><em>bbtree: fastest ordered map</em></a> describes a Rust B-tree that beats std's <code>BTreeMap</code> by 1.5 to 6.5 times, and it justifies every design choice by three costs. The goal of this project was to rebuild StunDB's tree the way bbtree is built and land near the post's numbers.</p>
+<p>This post walks through the rewrite in the order it happened. It covers what I deleted, the node layout, the node search, the concurrency protocol, batches, scans, testing, and the benchmark harness. Each section names the trade-off I made. Where the first attempt failed, it says what failed and why.</p>
+<p>The short version: on a Ryzen 7 4800H laptop, at 10M entries, StunDB's tree now looks up a <code>uint64</code> key in 380 ns and inserts one in 666 ns. The old tree took 3,752 ns and 4,202 ns. Against google/btree on the same machine, lookups are 1.9 to 3.6 times faster depending on the key type, and the post measures bbtree at 1.7 to 4.1 times std's <code>BTreeMap</code>. The ratios match. The nanoseconds don't, and a section near the end explains why.</p>
+<h2 id="the-starting-point-was-ten-levels-of-pointer-chasing">The starting point was ten levels of pointer chasing</h2>
+<p>Here is the old node, from <code>bptree/node.go</code>:</p>
+<figure class="code"><figcaption>Go</figcaption><pre><code>type Node struct {
+	keys         []Keytype <span class="c">// Keytype is []byte</span>
+	values       []Valuetype
+	children     []*Node
+	isleaf       bool
+	mu           sync.RWMutex
+	rightSibling *Node
+}
+
+const (
+	MaxKeys = 4
+	MinKeys = MaxKeys / 2
+)</code></pre></figure>
+<p>Read it with the post's first cost in mind, the number of cache lines a lookup must load one after another:</p>
+<ul><li><strong>Four keys a node.</strong> A 10M-entry tree with at most five children a node is at least 10 levels deep.</li><li><strong>Three dependent loads a level.</strong> Comparing against one key reads the node struct, then the <code>keys</code> slice's backing array, then the key's bytes. Each load needs the address the previous one returned.</li><li><strong>One tree-wide <code>sync.RWMutex</code>.</strong> Every <code>RLock</code> writes the mutex's reader count. Every lookup on every core writes the same cache line, so reads scale only until that line's transfers between cores saturate.</li></ul>
+<p>The repository also had a <code>ShardedBTree</code> that hashed keys with FNV-1a across <code>runtime.NumCPU()</code> such trees, to get write concurrency out of a single-lock design. It worked for point operations. <code>GetRange</code> had to query every shard and sort the merged results, which makes an ordered map's main advantage the slowest thing it does.</p>
+<p>On the benchmark workload described below, the old tree took 3,752 ns a lookup and 4,202 ns an insert at 10M entries.</p>
+<h2 id="the-post-ranks-costs-and-the-ranking-decides-everything">The post ranks costs, and the ranking decides everything</h2>
+<p>The post orders a B-tree's costs:</p>
+<ol><li>Chained cache lines: about 100 ns each when they come from DRAM.</li><li>Instructions: about 0.3 ns each.</li><li>Cache coherence traffic between cores.</li></ol>
+<p>The ranking matters more than the list. A change that saves twenty instructions but adds one dependent miss is a loss by a factor of fifteen. I used it as a rule for every decision below, and it settled most of them before any benchmark ran.</p>
+<p>The second decision was what "the same numbers" could mean. The post's machine is a Ryzen 9 9900X. Mine is a Zen 2 laptop with an eighth of the L3 cache per core complex and slower memory. Absolute nanoseconds were never going to match. So every result here is a ratio against a baseline on the same machine, compared with the post's ratio against its baseline:</p>
+<div class="table"><table><thead><tr><th>the post's map (Rust)</th><th>the stand-in here (Go)</th></tr></thead><tbody><tr><td>std <code>BTreeMap</code></td><td>google/btree, also tidwall/btree</td></tr><tr><td><code>RwLock&lt;BTreeMap&gt;</code></td><td><code>sync.RWMutex</code> + google/btree</td></tr><tr><td>crossbeam-skiplist</td><td>zhangyunhao116/skipmap</td></tr><tr><td><code>HashMap</code>, dashmap</td><td>Go's <code>map</code>, xsync.Map</td></tr></tbody></table></div>
+<p>google/btree is Go's most used B-tree. Like std's <code>BTreeMap</code>, it is a single-threaded B-tree with no SIMD and no prefix compression, so it carries the same costs the post set out to remove.</p>
+<h2 id="delete-before-building">Delete before building</h2>
+<p>The rewrite began by deciding what to keep.</p>
+<p>The old tree went. Nothing in it survives a design with fixed-size nodes and optimistic reads. The sharding layer went too. Sharding existed to give a single-lock tree write concurrency, and the new tree gets that per node, without hashing keys apart. Deleting it gave back in-order range scans.</p>
+<p>The write-ahead log and the secondary indexes stayed. They were sound, they had test suites, and they only needed a byte-keyed store underneath. That store is new: <code>internal/kv</code>, a thin layer over the generic tree.</p>
+<figure class="code"><figcaption>layout</figcaption><pre><code>internal/btree   the concurrent B+-tree: Map[K, V]
+      |
+internal/kv      byte keys and values over btree.Map[string, []byte]
+      |      \
+internal/wal   internal/index
+(redo log)     (secondary indexes)</code></pre></figure>
+<p><code>kv.Store</code> keeps the old API (<code>Insert</code>, <code>Find</code>, <code>GetRange</code>, <code>DeleteRange</code>, <code>BulkInsert</code>, <code>Count</code>), so the WAL and index tests pass with one change: their configs no longer take a <code>NumShards</code> field.</p>
+<h2 id="node-layout-comes-first">Node layout comes first</h2>
+<p>A node is a struct of fixed-size arrays, not slices. A slice header is a pointer, and following it is a dependent load. Here is the leaf, from <code>internal/btree/node.go</code>:</p>
+<figure class="code"><figcaption>Go</figcaption><pre><code>const (
+	slots    = 56        <span class="c">// inline-key slots per node; the last is always padding</span>
+	leafCap  = slots - 1 <span class="c">// entries per leaf</span>
+	innerCap = slots - 1 <span class="c">// separators per internal node</span>
+)
+
+type header struct {
+	ver   atomic.Uint64 <span class="c">// version lock: bit 0 latched, the rest a version</span>
+	n     uint16        <span class="c">// keys in a leaf, separators in an internal node</span>
+	plen  uint8         <span class="c">// bytes every key under this node shares</span>
+	level uint8         <span class="c">// 0 for leaves</span>
+	_     [4]byte
+}
+
+type leaf[K Key, V any, W word] struct {
+	header
+	ik   [slots]W <span class="c">// inline keys, 2 or 4 bytes each</span>
+	next *leaf[K, V, W]
+	keys [leafCap]K
+	vals [leafCap]V
+}</code></pre></figure>
+<figure class="leafmap" aria-label="Byte map of a uint64 to uint64 leaf, one row per 64-byte cache line">
+<figcaption><span class="fig-title">One <code>uint64 -&gt; uint64</code> leaf, one row per 64-byte cache line</span>
+<span class="fig-note">The search reads the two marked lines. A hit then reads one line of keys and one of values.</span></figcaption>
+<div class="lines"><div class="line hot"><span class="off">   0</span><span class="bar"><span class="seg hdr" style="flex:16" title="bytes 0 to 16"></span><span class="seg ik" style="flex:48" title="bytes 16 to 64"></span></span></div>
+<div class="line hot"><span class="off">  64</span><span class="bar"><span class="seg ik" style="flex:64" title="bytes 64 to 128"></span></span></div>
+<div class="line"><span class="off"> 128</span><span class="bar"><span class="seg nxt" style="flex:8" title="bytes 128 to 136"></span><span class="seg key" style="flex:56" title="bytes 136 to 192"></span></span></div>
+<div class="line"><span class="off"> 192</span><span class="bar"><span class="seg key" style="flex:64" title="bytes 192 to 256"></span></span></div>
+<div class="line"><span class="off"> 256</span><span class="bar"><span class="seg key" style="flex:64" title="bytes 256 to 320"></span></span></div>
+<div class="line"><span class="off"> 320</span><span class="bar"><span class="seg key" style="flex:64" title="bytes 320 to 384"></span></span></div>
+<div class="line"><span class="off"> 384</span><span class="bar"><span class="seg key" style="flex:64" title="bytes 384 to 448"></span></span></div>
+<div class="line"><span class="off"> 448</span><span class="bar"><span class="seg key" style="flex:64" title="bytes 448 to 512"></span></span></div>
+<div class="line"><span class="off"> 512</span><span class="bar"><span class="seg key" style="flex:64" title="bytes 512 to 576"></span></span></div>
+<div class="line"><span class="off"> 576</span><span class="bar"><span class="seg val" style="flex:64" title="bytes 576 to 640"></span></span></div>
+<div class="line"><span class="off"> 640</span><span class="bar"><span class="seg val" style="flex:64" title="bytes 640 to 704"></span></span></div>
+<div class="line"><span class="off"> 704</span><span class="bar"><span class="seg val" style="flex:64" title="bytes 704 to 768"></span></span></div>
+<div class="line"><span class="off"> 768</span><span class="bar"><span class="seg val" style="flex:64" title="bytes 768 to 832"></span></span></div>
+<div class="line"><span class="off"> 832</span><span class="bar"><span class="seg val" style="flex:64" title="bytes 832 to 896"></span></span></div>
+<div class="line"><span class="off"> 896</span><span class="bar"><span class="seg val" style="flex:64" title="bytes 896 to 960"></span></span></div>
+<div class="line"><span class="off"> 960</span><span class="bar"><span class="seg val" style="flex:56" title="bytes 960 to 1016"></span><span class="seg slk" style="flex:8" title="bytes 1016 to 1024"></span></span></div></div>
+<ul class="legend">
+<li><span class="sw hdr"></span>header, 16 B</li>
+<li><span class="sw ik"></span>56 inline keys, 112 B</li>
+<li><span class="sw nxt"></span><code>next</code>, 8 B</li>
+<li><span class="sw key"></span>55 keys, 440 B</li>
+<li><span class="sw val"></span>55 values, 440 B</li>
+<li><span class="sw slk"></span>unused, 8 B of the 1,024-byte size class</li>
+</ul>
+</figure>
+<p>The numbers fit together on purpose:</p>
+<ul><li>The 16-byte header and 56 two-byte inline keys are exactly 128 bytes, two cache lines. A search reads those two lines and, for a hit, the one key it lands on.</li><li>A <code>uint64 -&gt; uint64</code> leaf is 1,016 bytes. Go's allocator rounds objects up to size classes, and the class above 1,024 is 1,152. One byte over would waste 128 bytes a node.</li><li>The last inline-key slot is always padding, so the search never needs to know the node's count. More on that below.</li></ul>
+<p>The tree is generic over the key: <code>~uint64</code>, <code>~[16]byte</code> (UUIDs, hashes), or <code>~string</code>. That rules out <code>[]byte</code> keys in the tree's API, and it is a real trade-off. <code>kv.Store</code> copies a <code>[]byte</code> key into a string on insert. Lookups convert without copying through <code>btree.BytesKey</code>, so the cost falls only on writes, which copy the key anyway to own it.</p>
+<p>Go has no specialization, but it compiles a generic function once per GC shape, and the three key kinds are three shapes. Inside each instantiation, <code>unsafe.Sizeof</code> of the key is a constant, so a <code>switch kindOf[K]()</code> folds to one arm at compile time. Each key type gets its own node code for free. That "for free" comes with a catch, covered under inlining below.</p>
+<h2 id="inline-keys-keep-a-search-inside-two-cache-lines">Inline keys keep a search inside two cache lines</h2>
+<p>Every node keeps, beside its full keys, a dense array of <strong>inline keys</strong>. An inline key is a 2-byte (integers, UUIDs) or 4-byte (strings) window of the key's big-endian byte encoding. A node search compares the target's window against the inline keys and touches the full keys only for the one candidate they leave. For string keys that means it doesn't follow a pointer into the heap for every comparison, only for the last one.</p>
+<p>Two bytes out of an eight-byte key sound like too few. They aren't, because the window doesn't start at byte zero. It starts after the bytes every key in the node shares, the node's <strong>prefix</strong>. In a 10M-entry tree of random <code>uint64</code>s, one leaf covers about 2^64 / 2^18, or 2^46, of the key space. Its keys share their first two bytes, and the next two bytes almost always tell them apart.</p>
+<p>The prefix comes from the node's fences, the separator keys on either side of it in its ancestors. This is Bayer and Unterauer's prefix B-tree, and the post does the same:</p>
+<figure class="code"><figcaption>Go</figcaption><pre><code><span class="c">// prefixLen is how many bytes every key between the fences shares.</span>
+<span class="c">// No node stores the prefix itself; a key that reaches the node has it,</span>
+<span class="c">// because it sorts between the fences.</span>
+func (f *fences[K]) prefixLen() uint8 {
+	if !f.hasLo || !f.hasHi {
+		return 0
+	}
+	p := keyCPL(f.lo, f.hi)
+	if p &gt; 255 {
+		p = 255 <span class="c">// any shorter prefix is shared too</span>
+	}
+	return uint8(p)
+}</code></pre></figure>
+<p>No node stores its prefix bytes, only the length. A split computes the length for both halves from their new fences. Inserts never change it. And because nodes never merge (a trade-off covered later), a node's fences only narrow and its prefix only grows, so an inline key computed once stays correct for the node's lifetime.</p>
+<p>A leaf hit then costs one count, one compare of inline keys, and one compare of full keys:</p>
+<figure class="code"><figcaption>Go</figcaption><pre><code>func (l *leaf[K, V, W]) seek(key K, n int, v uint64) (pos int, found, ok bool) {
+	t := inlineOf[K, W](key, l.plen)
+	i := countLess(&amp;l.ik, t)
+	if i &gt;= n || l.ik[i] != t {
+		return min(i, n), false, true <span class="c">// no key ties: absent</span>
+	}
+	if kindOf[K]() != kindStr &amp;&amp; l.keys[i] == key {
+		return i, true, true <span class="c">// the usual hit: one candidate, compared in the node</span>
+	}
+	return l.seekTies(key, i, n, v)
+}</code></pre></figure>
+<p>A miss whose inline key matches nothing never reads a full key at all. The benchmark's lookups are half misses, so that path matters.</p>
+<p>The inline keys are not free, and three costs came with them:</p>
+<ul><li><strong>Ties cost a key read.</strong> When two keys share their window, the search falls back to the full keys. For strings each one is a heap pointer to follow. bbtree's design note D36 removes most of these: a string that ends inside the window is settled by its length alone, without reading its bytes. <code>tiedCompare</code> does the same.</li><li><strong>Border nodes have no prefix.</strong> The leftmost and rightmost nodes at each level have one open fence, so their prefix is empty. Dense keys there produce long runs of equal inline keys. When a run is longer than four, <code>seekTies</code> switches to a binary search over the full keys instead of walking them.</li><li><strong>Memory.</strong> A <code>uint64</code> entry costs 27.5 bytes in StunDB against 24.7 in google/btree, 11% more. bbtree's figure is 27.1, but std's <code>BTreeMap</code> is less compact than Go's B-trees, so the post comes out ahead of its baseline where this port doesn't. String leaves are worse: 1,568 bytes, which Go rounds to the 1,792-byte class, putting string keys 19 to 24% above google/btree.</li></ul>
+<h2 id="a-node-search-is-a-count-not-a-binary-search">A node search is a count, not a binary search</h2>
+<p>A binary search over 56 keys takes six steps, and each step's branch depends on the data, so the CPU guesses wrong about half the time. Each step also loads from an address the previous step chose.</p>
+<p>The post replaces it with a count. The number of inline keys smaller than the target is exactly the index to follow in an internal node, or the first candidate in a leaf. Slots past the node's count hold the largest possible value, so the count runs over all 56 slots with no loop bound, no early exit, and no branch. With <code>GOEXPERIMENT=simd</code> on amd64, it runs in AVX2 through Go 1.26's experimental <code>simd/archsimd</code> package:</p>
+<figure class="code"><figcaption>Go</figcaption><pre><code>q := (*[slots]int16)(p)
+tv := archsimd.BroadcastInt16x16(int16(t))
+m0 := tv.Greater(archsimd.LoadInt16x16((*[16]int16)(q[0:16]))).ToInt16x16()
+m1 := tv.Greater(archsimd.LoadInt16x16((*[16]int16)(q[16:32]))).ToInt16x16()
+m2 := tv.Greater(archsimd.LoadInt16x16((*[16]int16)(q[32:48]))).ToInt16x16()
+m3 := archsimd.BroadcastInt16x8(int16(t)).Greater(archsimd.LoadInt16x8((*[8]int16)(q[48:56]))).ToInt16x8()
+pair := m0.And(lowBytes16).Or(m1.AndNot(lowBytes16)) <span class="c">// a bit per lane of m0 and of m1</span>
+c01 := bits.OnesCount32(pair.AsInt8x32().Less(zeroBytes32).ToBits())
+c2 := bits.OnesCount32(m2.AsInt8x32().Less(zeroBytes32).ToBits()) <span class="c">// two bits per lane</span>
+c3 := bits.OnesCount16(m3.AsInt8x16().Less(zeroBytes16).ToBits()) <span class="c">// two bits per lane</span>
+archsimd.ClearAVXUpperBits()
+return c01 + (c2+c3)&gt;&gt;1</code></pre></figure>
+<p>That is four <code>VPCMPGTW</code> compares, three <code>VPMOVMSKB</code> byte movemasks, and three <code>POPCNT</code>s. AVX2 only compares signed integers, so inline keys are stored with their sign bit flipped (<code>toInline</code> in <code>inline.go</code>), and a signed compare of two stored keys orders them as unsigned windows.</p>
+<p>Three things about this code were learned the hard way.</p>
+<p><strong><code>Mask16x16.ToBits</code> is AVX-512.</strong> The natural way to turn a 16-bit compare mask into an integer is <code>ToBits</code>, and on a mask of 16-bit lanes archsimd compiles it to an AVX-512 mask-move instruction. Zen 2 has no AVX-512, and the first run died with <code>SIGILL: illegal instruction</code>. AVX2 only has a byte movemask. The fix is the <code>pair</code> line above: it takes the low byte of each lane from <code>m0</code> and the high byte from <code>m1</code>, so one byte movemask yields one bit per key of both masks. For the other two masks every key sets two bits, and the count is halved.</p>
+<p><strong>Without <code>VZEROUPPER</code>, batched lookups ran three times slower.</strong> Go's own generated code uses legacy SSE encodings. The ABI zeroes <code>X15</code> with <code>XORPS</code>, for example. On Zen 2, running legacy SSE instructions while the upper halves of the YMM registers are dirty costs a state transition. Single lookups hid it. Batched lookups, which interleave many counts with ordinary Go code, did not. <code>archsimd.ClearAVXUpperBits()</code> at the end of each count emits <code>VZEROUPPER</code> and removed the penalty.</p>
+<p><strong>Go's inliner charges for code it will delete.</strong> A helper that switches on <code>kindOf[K]()</code> folds to one arm after inlining, but the inliner decides before folding and counts the cost of every arm. A generic helper that handles three key types is never inlined, and an uninlined call on every level of every search is measurable. The fix was structural. <code>countLess</code> is a single call, <code>inlineOf</code> handles the <code>uint64</code> window with one shift and calls out only for the other kinds, and the common leaf hit uses <code>==</code>, which Go compiles natively for each shape. Each hot helper ends up with at most one out-of-line call.</p>
+<p>Builds without <code>GOEXPERIMENT=simd</code>, or without AVX2, use a branchless binary search (as in Khuong and Morin's study of array layouts) instead. I also wrote a SWAR count that packs four 16-bit compares into one 64-bit word, and dropped it in favor of the branchless search. The scalar count stays in <code>inline.go</code> as the reference that tests check both faster versions against.</p>
+<p>The cost of this choice is the build. The fast path needs <code>GOEXPERIMENT=simd GOAMD64=v3</code>. That experiment is not covered by Go's compatibility promise, and there is no AVX-512 or ARM NEON path. I accepted that because a plain build still works and is still correct.</p>
+<h2 id="readers-that-write-nothing">Readers that write nothing</h2>
+<p>The post's third cost is coherence traffic. A lock that readers take, even a reader-writer lock, is a cache line every reader writes. So the tree uses <strong>optimistic lock coupling</strong>, from Leis et al.'s <em>The ART of Practical Synchronization</em>, which is also what bbtree uses.</p>
+<p>Every node has a 64-bit version word. Bit 0 is a latch. Releasing the latch adds one, which clears the bit and bumps the version in one atomic add. A reader reads the version, reads the node, and reads the version again. If the version is unchanged and wasn't latched, what it read is consistent. If not, it starts over from the root.</p>
+<p>The descent is the part to get right:</p>
+<figure class="code"><figcaption>Go</figcaption><pre><code>for n.level != 0 {
+	in := asInner[K, V, W](n)
+	idx, ok := in.route(key, in.count(innerCap), v)
+	if !ok {
+		continue restart
+	}
+	child := in.children[idx]
+	if child == nil {
+		continue restart
+	}
+	cv := child.ver.Load()
+	if in.ver.Load() != v || cv&amp;lockedBit != 0 {
+		continue restart
+	}
+	n, v = child, cv
+}</code></pre></figure>
+<p>The order matters. The reader loads the child's version first, then checks the parent's. If the parent is unchanged at that point, the child was still the parent's child when its version was read. Checking the parent before reading the child's version leaves a window where a split moves the key to a new right sibling and the reader searches the wrong node. That is the classic bug in optimistic lock coupling, and the stress tests described below catch it within a few runs.</p>
+<p>At the leaf, <code>get</code> copies the value out and validates afterward, as a seqlock does:</p>
+<figure class="code"><figcaption>Go</figcaption><pre><code>if hit {
+	val = l.vals[pos] <span class="c">// copied out, then validated: a seqlock read</span>
+}
+if l.ver.Load() == v {
+	return val, hit
+}</code></pre></figure>
+<p>This is where Go turned out easier than Rust. bbtree only allows this pattern for <code>Copy</code> values and keeps freed nodes on free lists of type-stable pages, so that a slow reader holding a stale pointer still reads memory shaped like a node. In Go a reader that holds a pointer keeps the node alive, and a torn copy of a value with pointers is discarded unused. The garbage collector does the work of bbtree's whole reclamation scheme. There are no epochs, no guards, and no free lists.</p>
+<p>Writers latch only what they change, by compare-and-swap from the version their descent read. An insert latches its leaf. Full internal nodes split on the way down, with their parent latched, as in Leis et al.'s B-tree. So a full leaf's parent always has room for the new separator, and a split never climbs back up the tree. A writer that latches a node and then changes nothing restores the old version (<code>unlockUnchanged</code>), so concurrent readers don't restart for nothing.</p>
+<p>Three trade-offs came with this design.</p>
+<ul><li><strong>No merges.</strong> Removing entries never merges nodes. Merges would make fences widen and prefixes shrink, which breaks the "computed once, correct forever" property of inline keys, and they complicate the concurrency protocol. The cost is that a tree that shrinks keeps its nodes until <code>Clear</code>. Lookups and scans stay correct.</li><li><strong>No O(1) <code>Len</code>.</strong> A shared counter is one cache line that every insert on every core writes, the exact traffic the design avoids. <code>Map.Len</code> walks the leaves. <code>kv.Store.Count</code> keeps a striped counter, because the store's callers expected a cheap count.</li><li><strong>The race detector can't check it.</strong> Optimistic readers read non-atomic fields while writers change them, then discard what the version check shows was torn. That is a data race by design, and <code>go test -race</code> reports it. Under <code>-race</code>, the map serializes writers against readers with a <code>sync.RWMutex</code> (<code>race_on.go</code>), so the layers above are still race-checked against the same API. The lock-free paths are tested by stress tests in ordinary builds instead. I'm comfortable with that split, but it means the most subtle code has no tool checking it, only tests.</li></ul>
+<p>On threads, the protocol does what the post says it does. At 16 threads on 8 cores, lookups reach 29.8M a second, 6.6 times zhangyunhao116/skipmap. Updates reach 20.9M a second, while an <code>RWMutex</code> around google/btree stays at 1.3M no matter how many threads write.</p>
+<h2 id="batches-without-async">Batches without async</h2>
+<p>A lookup's cache misses are chained. It can't fetch the next node before it has searched this one. A batch hides that latency by running many lookups at once: each one prefetches the line it needs next and steps aside while the line arrives.</p>
+<p>bbtree writes each lookup as an async function, so the Rust compiler builds a small state machine per lookup, and polls the lanes with its own executor. Go has no zero-cost async. Goroutines are far too heavy for this, so my first version wrote the state machine by hand: per-lane state and a <code>switch</code> on it every step. It cost more in branches than it hid in misses.</p>
+<p>The fix came from noticing a property of B+-trees. Every leaf is at the same depth, so the lanes don't need independent state machines. They can move down the tree in lockstep, one level at a time. This is group prefetching, from Chen et al. (SIGMOD 2004). Each level is two passes over the lanes:</p>
+<ol><li>Search each lane's node and prefetch the child pointer it chose.</li><li>Follow each pointer and prefetch the child's header and inline keys.</li></ol>
+<p>By the time pass 1 comes back to a lane on the next level, its lines have arrived. A lane whose version check fails sets a bit in a <code>failed</code> mask and is retried alone at the end. No lane holds a latch between passes, so lanes never wait on one another.</p>
+<p>Some numbers in <code>batch.go</code> are tuned to the hardware. <code>batchLanes</code> is 24, roughly the number of L1 miss buffers on a Zen 2 core, so each pass keeps about that many misses in flight. <code>minBatchHeight</code> is 3, because trees with fewer levels fit in cache and the passes cost more than they hide. Go has no prefetch intrinsic, so <code>prefetch_amd64.s</code> is three tiny assembly functions that issue <code>PREFETCHT0</code> on one, two, or four lines.</p>
+<p><code>InsertMany</code> descends the same way, then latches each lane's leaf in order. When two lanes share a leaf, the first insert bumps the leaf's version, so the second lane's latch attempt would fail. The code updates the version it expects for later lanes on the same leaf instead of sending them back to the root.</p>
+<p>bbtree's design note D46 forbids prefetching outside batches, and I followed it. Prefetching a single lookup's next level speculatively trades memory bandwidth for latency, and it hides how good the layout is. The post's single-lookup numbers don't use it, so mine don't either.</p>
+<p>The result: batched <code>uint64</code> lookups take 253 ns against 380 ns one at a time, and batched inserts take 395 ns against 666 ns.</p>
+<h2 id="scans-copy-leaves-out">Scans copy leaves out</h2>
+<p>Leaves are linked through <code>next</code>, so a scan walks right without returning to the root. For each leaf, <code>ascend</code> copies the keys and values out under the leaf's version, checks the version, and only then hands the copies to the callback. The callback runs with no latch held, so it can call back into the map. If the version check fails, the scan restarts from the root at the last key it handed out. An entry present for the whole scan is visited exactly once, but a scan is not a snapshot.</p>
+<p>One small trick: the scan reads the next leaf's version before copying the current one, so that probable miss is in flight during the copy. I also tried interleaving the copy with the callbacks, and it was slower (about 1,605 ns against 1,450 ns for a 100-entry scan), so I reverted it.</p>
+<p>Scans are the one place the port clearly trails the post. A 100-entry <code>uint64</code> scan is 1.6 times google/btree, where the post measures 2.7 times std's <code>BTreeMap</code>. String keys are on par with or ahead of the post. I haven't pinned down the <code>uint64</code> gap. My first suspect is the callback, an indirect call per entry that Go doesn't inline, which costs proportionally more when each entry is only 16 bytes.</p>
+<h2 id="testing-a-tree-whose-reads-are-races">Testing a tree whose reads are races</h2>
+<p>With the race detector out of the picture for the core, the tests had to carry more weight. There are four kinds:</p>
+<ul><li><strong>Differential tests</strong> run random operations on the tree and on a Go <code>map</code> side by side, for each key type, over many key shapes. The shapes include dense, strided, random, strings sharing 300-byte prefixes, and binary keys with zero bytes.</li><li><strong>Invariant checks</strong> (<code>invariants_test.go</code>) walk the tree after each run. They check that keys are sorted, that every inline key equals its key's window at the node's prefix, that each prefix is exactly what the node's fences share, and that the leaf chain is complete.</li><li><strong>Fuzzing</strong> with <code>FuzzU64</code> and <code>FuzzString</code> feeds arbitrary operation sequences through the same differential check.</li><li><strong>Stress tests</strong> (<code>concurrent_test.go</code>) race readers, writers, batches, and scans. Every value a reader sees is checked against what writers have published.</li></ul>
+<p>Every test runs in three builds: AVX2, portable, and <code>-race</code>.</p>
+<h2 id="the-benchmark-harness-had-bugs-too">The benchmark harness had bugs too</h2>
+<p><code>bench/</code> is a separate Go module, so the core keeps zero dependencies. It runs the post's workloads: 10M entries with <code>uint64</code> values, four key sets (<code>uint64</code>, UUIDs, Wikipedia titles, and JSON-style keys), lookups half of which miss, inserts, updates, and 100-entry scans, on one thread and on 1 to 16.</p>
+<p>Two harness bugs produced wrong numbers before they produced right ones.</p>
+<p><strong>Huge pages silently weren't used.</strong> The post's runs have transparent huge pages, and a 10M-entry tree spread over 4 KB pages pays a TLB miss on most node visits. This machine's THP setting is <code>madvise</code>, so the harness asks for huge pages with <code>MADV_COLLAPSE</code> on the heap after building each map. The first version matched nothing, because Go 1.26 names its heap mappings <code>[anon: Go: heap]</code> in <code>/proc/self/maps</code>, not <code>[heap]</code>. Measured by pointer chasing, a dependent DRAM miss costs 94 ns with huge pages and 121 ns without. Every map, baselines included, gets the same treatment.</p>
+<p><strong>Garbage collection leaked into timed runs.</strong> Building a 10M-entry map allocates a lot, and the collector's mark phase was still running when the timed reads started. The symptom was absurd: batched JSON-key lookups at 16 threads read 5.5M a second. The fix is one line, a <code>runtime.GC()</code> after each build. The <code>uint64</code> threaded tables were rerun with it. The UUID and JSON threaded tables predate the fix and say so in <code>bench/results/threads-str.md</code>.</p>
+<p>One constraint shaped the profiling. <code>perf</code> was unavailable on this machine (<code>perf_event_paranoid</code> is 4), so every profile came from pprof, which sees functions and lines but not cache misses. Cache behavior was reasoned about from the layout and checked against timings, not measured directly.</p>
+<h2 id="results">Results</h2>
+<p>All numbers are at 10M entries, one thread, on the 4800H, from <code>bench/results/ryzen-4800h-20261103.md</code>. Each ratio is the speedup over the baseline on the same machine: google/btree here, std's <code>BTreeMap</code> for the post. Batched calls are in brackets.</p>
+<div class="table"><table><thead><tr><th>keys</th><th>get, StunDB</th><th>get, post</th><th>insert, StunDB</th><th>insert, post</th><th>update, StunDB</th><th>update, post</th><th>scan, StunDB</th><th>scan, post</th></tr></thead><tbody><tr><td><code>uint64</code></td><td>2.2× (3.4×)</td><td>2.4× (3.6×)</td><td>1.4× (2.3×)</td><td>1.5× (2.1×)</td><td>1.9×</td><td>2.3×</td><td>1.6×</td><td>2.7×</td></tr><tr><td>UUID</td><td>3.6× (5.1×)</td><td>2.8× (3.9×)</td><td>2.3× (3.0×)</td><td>2.1× (2.7×)</td><td>3.2×</td><td>2.5×</td><td>2.2×</td><td>2.3×</td></tr><tr><td>Wikipedia titles</td><td>1.9× (2.8×)</td><td>1.7× (2.4×)</td><td>1.7× (2.2×)</td><td>1.5× (1.9×)</td><td>1.8×</td><td>1.6×</td><td>1.9×</td><td>1.7×</td></tr><tr><td>JSON keys</td><td>3.5× (4.6×)</td><td>4.1× (6.5×)</td><td>2.3× (3.0×)</td><td>2.3× (3.6×)</td><td>3.2×</td><td>3.4×</td><td>2.4×</td><td>2.0×</td></tr></tbody></table></div>
+<p>Nineteen of the 24 cells land within 20% of the post's ratio. UUID keys do better than the post, and I don't have a verified reason. The baseline isn't handicapped: the harness compares UUIDs in google/btree as two 64-bit integers. Batched JSON-key lookups and <code>uint64</code> scans do worse.</p>
+<p>Against the old StunDB tree, lookups are 9.9 times faster (14.8 times batched) and inserts 6.3 times faster.</p>
+<h2 id="why-380-ns-and-not-109">Why 380 ns and not 109</h2>
+<p>The post's <code>uint64</code> lookup takes 109 ns. Mine takes 380. The difference is the memory system, not the code.</p>
+<p>The 9900X has 32 MB of L3 per core complex. That holds every internal node of a 10M-entry tree, so a lookup misses to DRAM about 1.5 times: the leaf, and sometimes its parent. The 4800H has 4 MB of L3 per core complex. Only the top of the tree fits, and the level just above the leaves misses too. A lookup here waits on about 3.5 dependent DRAM misses at 94 ns each, roughly 330 ns, and the search code fills the rest.</p>
+<p>The baselines pay the same penalty, which is why the ratios hold while the nanoseconds don't. The same arithmetic bounds the threaded numbers. At about 30M lookups a second and 3.5 lines each from DRAM, the laptop's two memory channels are the limit, not contention. No lookup writes shared memory.</p>
+<h2 id="where-the-port-falls-short">Where the port falls short</h2>
+<ul><li><code>uint64</code> scans and updates trail the post's ratios: 1.6 against 2.7 times, and 1.9 against 2.3 times.</li><li>Nodes never merge, so deleting entries returns no memory until <code>Clear</code>.</li><li>The SIMD search is AVX2 only. The post's AVX-512 compare (<code>_mm512_cmplt_epu16_mask</code>) has no counterpart here, and neither does NEON.</li><li>The fast path depends on <code>GOEXPERIMENT=simd</code>, which is experimental.</li><li>The race detector doesn't check the optimistic paths, only the stress tests do.</li><li>Memory per entry is 11 to 24% above Go's B-trees, where bbtree is close to its baseline.</li><li>The threaded UUID and JSON tables should be rerun with the GC fix.</li></ul>
+<h2 id="what-carried-over-and-what-didn-t">What carried over and what didn't</h2>
+<p>The post's ranking of costs carried over to Go unchanged. Every decision it settled in Rust, it settled the same way here: fixed nodes sized to cache lines and size classes, inline keys behind a fence-derived prefix, a branchless count, and readers that write nothing. The ratios came out where the post's did, which I take as evidence that the gains come from the layout, not from Rust.</p>
+<p>The Go-specific work split cleanly into one large gift and several taxes. The gift is the garbage collector, which replaces bbtree's type-stable pages, free lists, and the reasoning that goes with them. It also lets the seqlock read work for any value type. The taxes all came from the toolchain. There is no zero-cost async, so batches had to become lockstep group prefetching. SIMD sits behind an experiment flag, with an API where the obvious mask call compiles to an instruction my CPU doesn't have. The legacy SSE encodings in Go's own code need a <code>VZEROUPPER</code> after every AVX2 block. And the inliner charges for switch arms it is about to delete, which shaped the structure of every hot helper.</p>
+<p>If I did it again, I'd start with the benchmark harness, not the tree. Both harness bugs produced numbers that looked plausible enough to tune against, and the THP bug alone changed the cost of every miss by more than a fifth.</p>
+<h2 id="reproduce-the-numbers">Reproduce the numbers</h2>
+<figure class="code"><figcaption>shell</figcaption><pre><code>export GOEXPERIMENT=simd GOAMD64=v3
+go test ./...                            <span class="c"># AVX2 search</span>
+GOEXPERIMENT= go test ./...              <span class="c"># portable search</span>
+go test -race ./...                      <span class="c"># race build, map serialized</span>
+go test -fuzz FuzzU64 ./internal/btree
+
+cd bench
+./fetch-data.sh                          <span class="c"># Wikipedia titles, 110 MB</span>
+go run . -mode single -keys u64,uuid     <span class="c"># one cell group</span>
+./run-all.sh                             <span class="c"># every table, about an hour</span></code></pre></figure>
+<p>The design is documented piece by piece in <a href="ARCHITECTURE.md">ARCHITECTURE.md</a>, and the full result tables are in <a href="../bench/results/">bench/results/</a>.</p>
+</main>
+</body>
+</html>

@@ -1,1 +1,6 @@
 .env
+# benchmark outputs
+bench/results.csv
+bench/stundb-bench
+bench/results/*.log
+bench/bench
