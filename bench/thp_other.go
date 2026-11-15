@@ -2,5 +2,6 @@
 
 package main
 
-func collapseHeap()    {}
-func hugePagesKB() int { return -1 }
+func collapseHeap()       {}
+func hugePagesKB() int    { return -1 }
+func powerSource() string { return "unknown" }

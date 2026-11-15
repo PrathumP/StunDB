@@ -3,6 +3,7 @@ package wal
 import (
 	"fmt"
 	"sync"
+	"sync/atomic"
 
 	"github.com/prathump/stundb/internal/kv"
 )
@@ -24,13 +25,39 @@ type (
 // mutations reach the tree, and replay rebuilds the same state. Readers take
 // no lock: the tree serves them concurrently with the writer.
 //
+// BulkInsert is atomic for readers too. While it applies a batch, bulkSeq is
+// odd and bulk is held; Find, GetRange and Count read between two loads of
+// bulkSeq and retry if a batch overlapped them, waiting on bulk if one is
+// running. So outside a batch a read costs two atomic loads of a line that
+// only BulkInsert writes, and readers still write nothing.
+//
 // Note that the tree itself lives only in memory; see docs/DURABILITY.md.
 type DurableBTree struct {
 	tree *kv.Store
 	wal  *WAL
 	mu   sync.Mutex
 
+	bulk    sync.RWMutex
+	bulkSeq atomic.Uint64
+
 	config DurableConfig
+}
+
+// stable runs read so that it sees each BulkInsert entirely or not at all.
+// read may run more than once.
+func (db *DurableBTree) stable(read func()) {
+	for {
+		s := db.bulkSeq.Load()
+		if s&1 != 0 {
+			db.bulk.RLock() // wait for the batch to finish
+			db.bulk.RUnlock()
+			continue
+		}
+		read()
+		if db.bulkSeq.Load() == s {
+			return
+		}
+	}
 }
 
 // DurableConfig configures the durable B-Tree.
@@ -100,6 +127,12 @@ func (db *DurableBTree) recover() (int, error) {
 			db.tree.Delete(entry.Key)
 		case OpClear:
 			db.tree.Clear()
+		case OpBatch:
+			keys, values, err := DecodeBatch(entry.Value)
+			if err != nil {
+				return err
+			}
+			return db.tree.BulkInsert(keys, values)
 		}
 		return nil
 	})
@@ -141,8 +174,9 @@ func (db *DurableBTree) Delete(key Keytype) (bool, error) {
 }
 
 // Find searches for a key (read-only, no WAL).
-func (db *DurableBTree) Find(key Keytype) (Valuetype, error) {
-	return db.tree.Find(key)
+func (db *DurableBTree) Find(key Keytype) (v Valuetype, err error) {
+	db.stable(func() { v, err = db.tree.Find(key) })
+	return v, err
 }
 
 // Get is an alias for Find.
@@ -151,8 +185,9 @@ func (db *DurableBTree) Get(key Keytype) (Valuetype, error) {
 }
 
 // GetRange returns all key-value pairs in the range (read-only, no WAL).
-func (db *DurableBTree) GetRange(startKey, endKey Keytype) ([]Keytype, []Valuetype, error) {
-	return db.tree.GetRange(startKey, endKey)
+func (db *DurableBTree) GetRange(startKey, endKey Keytype) (keys []Keytype, values []Valuetype, err error) {
+	db.stable(func() { keys, values, err = db.tree.GetRange(startKey, endKey) })
+	return keys, values, err
 }
 
 // Clear removes all entries with WAL durability.
@@ -170,8 +205,11 @@ func (db *DurableBTree) Clear() error {
 	return nil
 }
 
-// BulkInsert inserts multiple key-value pairs with WAL durability.
-// All entries are logged before any are applied (atomic batch).
+// BulkInsert inserts multiple key-value pairs with WAL durability, as one
+// atomic batch: the batch is one WAL entry, synced before it is applied, so
+// recovery restores all of it or none; and Find, GetRange and Count see all of
+// it or none (see DurableBTree). ForEach is not a snapshot and may see part of
+// a batch.
 func (db *DurableBTree) BulkInsert(keys []Keytype, values []Valuetype) error {
 	if len(keys) != len(values) {
 		return fmt.Errorf("keys and values length mismatch")
@@ -180,28 +218,29 @@ func (db *DurableBTree) BulkInsert(keys []Keytype, values []Valuetype) error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
-	// Log all to WAL first
-	for i := range keys {
-		if _, err := db.wal.AppendInsert(keys[i], values[i]); err != nil {
-			return fmt.Errorf("WAL bulk insert failed at index %d: %w", i, err)
-		}
+	if _, err := db.wal.AppendBatch(keys, values); err != nil {
+		return fmt.Errorf("WAL bulk insert failed: %w", err)
 	}
-
-	// Sync WAL before applying (ensures durability of batch)
 	if err := db.wal.Sync(); err != nil {
 		return fmt.Errorf("WAL sync failed: %w", err)
 	}
 
-	// Apply all to tree
-	return db.tree.BulkInsert(keys, values)
+	db.bulk.Lock()
+	db.bulkSeq.Add(1)
+	err := db.tree.BulkInsert(keys, values)
+	db.bulkSeq.Add(1)
+	db.bulk.Unlock()
+	return err
 }
 
 // Count returns the total number of keys.
-func (db *DurableBTree) Count() int64 {
-	return db.tree.Count()
+func (db *DurableBTree) Count() (n int64) {
+	db.stable(func() { n = db.tree.Count() })
+	return n
 }
 
-// ForEach iterates over all key-value pairs.
+// ForEach calls fn on copies of the entries in key order until fn returns
+// false. It is not a snapshot: it may see part of a concurrent write.
 func (db *DurableBTree) ForEach(fn func(key Keytype, value Valuetype) bool) {
 	db.tree.ForEach(fn)
 }

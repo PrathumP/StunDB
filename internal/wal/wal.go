@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"hash/crc32"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"sync"
@@ -23,6 +24,9 @@ import (
 // LOG FORMAT:
 // Each entry: [length:4][sequence:8][op:1][keyLen:4][key][valueLen:4][value][checksum:4]
 //
+// A crash can leave a torn entry at the end. Opening the WAL cuts it off, so
+// entries appended afterwards follow the last whole one.
+//
 // DURABILITY LEVELS:
 // - SyncNone: No fsync (fastest, least durable)
 // - SyncBatch: Fsync every N entries
@@ -30,7 +34,7 @@ import (
 type WAL struct {
 	file     *os.File
 	mu       sync.Mutex
-	sequence uint64
+	sequence atomic.Uint64
 	path     string
 
 	// Configuration
@@ -39,10 +43,10 @@ type WAL struct {
 	batchCount int
 
 	// Statistics
-	totalWrites    uint64
-	totalBytes     uint64
-	totalSyncs     uint64
-	lastCheckpoint uint64
+	totalWrites    atomic.Uint64
+	totalBytes     atomic.Uint64
+	totalSyncs     atomic.Uint64
+	lastCheckpoint atomic.Uint64
 
 	// Buffered writer for performance
 	writer *bufio.Writer
@@ -68,6 +72,10 @@ const (
 	OpInsert OpType = iota + 1
 	OpDelete
 	OpClear
+	// OpBatch is a whole BulkInsert in one entry: its value holds every key
+	// and value (see EncodeBatch). One entry has one checksum, so recovery
+	// replays all of a batch or none of it.
+	OpBatch
 )
 
 // LogEntry represents a single entry in the WAL.
@@ -207,29 +215,37 @@ func (w *WAL) validateAndRecover() error {
 		return fmt.Errorf("unsupported WAL version: %d", header.Version)
 	}
 
-	// Scan through entries to find last sequence
-	reader := bufio.NewReader(w.file)
-	var lastSeq uint64
-
-	for {
-		entry, err := readEntry(reader)
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			// Truncate corrupted tail
-			break
-		}
-		lastSeq = entry.Sequence
-	}
-
-	w.sequence = lastSeq
-
-	// Seek to end for appending
-	if _, err := w.file.Seek(0, io.SeekEnd); err != nil {
+	info, err := w.file.Stat()
+	if err != nil {
 		return err
 	}
 
+	// Scan the entries for the last sequence and the end of the last whole
+	// entry.
+	reader := bufio.NewReader(w.file)
+	var lastSeq uint64
+	good := int64(headerSize)
+	for {
+		entry, err := readEntryMax(reader, info.Size()-good)
+		if err != nil {
+			break // io.EOF, or a torn or corrupt tail
+		}
+		lastSeq = entry.Sequence
+		good += entrySize(entry)
+	}
+	w.sequence.Store(lastSeq)
+
+	// Cut off a torn tail. A crash in the middle of an append leaves part of
+	// an entry at the end; new entries appended after it would sit behind an
+	// entry that never parses, and every later replay would stop before them.
+	if good < info.Size() {
+		if err := w.file.Truncate(good); err != nil {
+			return fmt.Errorf("failed to truncate torn WAL tail: %w", err)
+		}
+		if err := w.file.Sync(); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -238,8 +254,7 @@ func (w *WAL) Append(op OpType, key, value []byte) (uint64, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	// Increment sequence
-	seq := atomic.AddUint64(&w.sequence, 1)
+	seq := w.sequence.Add(1)
 
 	entry := LogEntry{
 		Sequence: seq,
@@ -256,7 +271,7 @@ func (w *WAL) Append(op OpType, key, value []byte) (uint64, error) {
 		return 0, fmt.Errorf("failed to write WAL entry: %w", err)
 	}
 
-	atomic.AddUint64(&w.totalWrites, 1)
+	w.totalWrites.Add(1)
 	w.batchCount++
 
 	// Handle sync based on mode
@@ -282,11 +297,99 @@ func (w *WAL) AppendClear() (uint64, error) {
 	return w.Append(OpClear, nil, nil)
 }
 
+// AppendBatch logs keys[i] = values[i] for every i as one entry.
+func (w *WAL) AppendBatch(keys, values [][]byte) (uint64, error) {
+	batch, err := EncodeBatch(keys, values)
+	if err != nil {
+		return 0, err
+	}
+	return w.Append(OpBatch, nil, batch)
+}
+
+// EncodeBatch encodes key-value pairs as an OpBatch entry's value:
+// [count:4] then, per pair, [keyLen:4][key][valueLen:4][value].
+func EncodeBatch(keys, values [][]byte) ([]byte, error) {
+	if len(keys) != len(values) {
+		return nil, errors.New("keys and values length mismatch")
+	}
+	size := int64(4)
+	for i := range keys {
+		size += 8 + int64(len(keys[i])) + int64(len(values[i]))
+	}
+	if size > maxEntryBody {
+		return nil, fmt.Errorf("batch of %d bytes exceeds the WAL entry limit of %d", size, int64(maxEntryBody))
+	}
+	buf := make([]byte, 0, size)
+	buf = binary.LittleEndian.AppendUint32(buf, uint32(len(keys)))
+	for i := range keys {
+		buf = binary.LittleEndian.AppendUint32(buf, uint32(len(keys[i])))
+		buf = append(buf, keys[i]...)
+		buf = binary.LittleEndian.AppendUint32(buf, uint32(len(values[i])))
+		buf = append(buf, values[i]...)
+	}
+	return buf, nil
+}
+
+// DecodeBatch decodes an OpBatch entry's value.
+func DecodeBatch(b []byte) (keys, values [][]byte, err error) {
+	bad := errors.New("malformed WAL batch")
+	next := func() ([]byte, bool) {
+		if len(b) < 4 {
+			return nil, false
+		}
+		n := binary.LittleEndian.Uint32(b)
+		if uint64(len(b)-4) < uint64(n) {
+			return nil, false
+		}
+		v := b[4 : 4+n : 4+n]
+		b = b[4+n:]
+		return v, true
+	}
+	if len(b) < 4 {
+		return nil, nil, bad
+	}
+	n := binary.LittleEndian.Uint32(b)
+	b = b[4:]
+	if uint64(n) > uint64(len(b))/8 {
+		return nil, nil, bad
+	}
+	keys, values = make([][]byte, n), make([][]byte, n)
+	for i := range keys {
+		var ok1, ok2 bool
+		keys[i], ok1 = next()
+		values[i], ok2 = next()
+		if !ok1 || !ok2 {
+			return nil, nil, bad
+		}
+	}
+	if len(b) != 0 {
+		return nil, nil, bad
+	}
+	return keys, values, nil
+}
+
+// headerSize is the size of the file header; entryOverhead is the size of an
+// entry's fields other than its key and value, after the length prefix:
+// sequence(8) + op(1) + keyLen(4) + valueLen(4) + checksum(4).
+const (
+	headerSize    = 8
+	entryOverhead = 8 + 1 + 4 + 4 + 4
+	// maxEntryBody bounds an entry's length field, which is 32 bits.
+	maxEntryBody = 1<<32 - 1 - entryOverhead
+)
+
+// entrySize is the number of bytes entry takes in the file, length prefix
+// included.
+func entrySize(entry *LogEntry) int64 {
+	return 4 + entryOverhead + int64(len(entry.Key)) + int64(len(entry.Value))
+}
+
 // writeEntry serializes and writes a log entry.
 func (w *WAL) writeEntry(entry *LogEntry) error {
-	// Calculate total length
-	// sequence(8) + op(1) + keyLen(4) + key + valueLen(4) + value + checksum(4)
-	entryLen := 8 + 1 + 4 + len(entry.Key) + 4 + len(entry.Value) + 4
+	if int64(len(entry.Key))+int64(len(entry.Value)) > maxEntryBody {
+		return errors.New("WAL entry too large")
+	}
+	entryLen := entryOverhead + len(entry.Key) + len(entry.Value)
 
 	// Write length prefix
 	if err := binary.Write(w.writer, binary.LittleEndian, uint32(entryLen)); err != nil {
@@ -324,17 +427,31 @@ func (w *WAL) writeEntry(entry *LogEntry) error {
 		return err
 	}
 
-	atomic.AddUint64(&w.totalBytes, uint64(4+entryLen)) // length prefix + entry
+	w.totalBytes.Add(uint64(4 + entryLen)) // length prefix + entry
 
 	return nil
 }
 
 // readEntry reads a single log entry from the reader.
 func readEntry(reader *bufio.Reader) (*LogEntry, error) {
+	return readEntryMax(reader, math.MaxInt64)
+}
+
+// errCorrupt reports an entry whose fields don't add up: a torn or damaged
+// tail.
+var errCorrupt = errors.New("corrupt WAL entry")
+
+// readEntryMax reads a single log entry that takes at most max bytes of the
+// file. The bound and the length checks keep a damaged length field from
+// asking for gigabytes of memory.
+func readEntryMax(reader *bufio.Reader, max int64) (*LogEntry, error) {
 	// Read length
 	var length uint32
 	if err := binary.Read(reader, binary.LittleEndian, &length); err != nil {
 		return nil, err
+	}
+	if length < entryOverhead || int64(length)+4 > max {
+		return nil, errCorrupt
 	}
 
 	// Read sequence
@@ -354,6 +471,9 @@ func readEntry(reader *bufio.Reader) (*LogEntry, error) {
 	if err := binary.Read(reader, binary.LittleEndian, &keyLen); err != nil {
 		return nil, err
 	}
+	if keyLen > length-entryOverhead {
+		return nil, errCorrupt
+	}
 	key := make([]byte, keyLen)
 	if _, err := io.ReadFull(reader, key); err != nil {
 		return nil, err
@@ -363,6 +483,9 @@ func readEntry(reader *bufio.Reader) (*LogEntry, error) {
 	var valueLen uint32
 	if err := binary.Read(reader, binary.LittleEndian, &valueLen); err != nil {
 		return nil, err
+	}
+	if valueLen != length-entryOverhead-keyLen {
+		return nil, errCorrupt
 	}
 	value := make([]byte, valueLen)
 	if _, err := io.ReadFull(reader, value); err != nil {
@@ -439,7 +562,7 @@ func (w *WAL) sync() error {
 	if err := w.writer.Flush(); err != nil {
 		return err
 	}
-	atomic.AddUint64(&w.totalSyncs, 1)
+	w.totalSyncs.Add(1)
 	return w.file.Sync()
 }
 
@@ -462,7 +585,7 @@ func (w *WAL) Replay(callback func(*LogEntry) error) (int, error) {
 	}
 
 	// Seek to beginning (after header)
-	if _, err := w.file.Seek(8, io.SeekStart); err != nil { // 8 bytes for header
+	if _, err := w.file.Seek(headerSize, io.SeekStart); err != nil {
 		return 0, err
 	}
 
@@ -510,7 +633,7 @@ func (w *WAL) Checkpoint() error {
 	}
 
 	// Record checkpoint sequence
-	atomic.StoreUint64(&w.lastCheckpoint, w.sequence)
+	w.lastCheckpoint.Store(w.sequence.Load())
 
 	// Close current file
 	if err := w.file.Close(); err != nil {
@@ -557,7 +680,7 @@ func (w *WAL) RotateLog() (string, error) {
 	}
 
 	// Rename current file with sequence number
-	archivePath := fmt.Sprintf("%s.%d", w.path, w.sequence)
+	archivePath := fmt.Sprintf("%s.%d", w.path, w.sequence.Load())
 	if err := os.Rename(w.path, archivePath); err != nil {
 		return "", err
 	}
@@ -590,11 +713,11 @@ func (w *WAL) Stats() WALStats {
 	}
 
 	return WALStats{
-		Sequence:       atomic.LoadUint64(&w.sequence),
-		TotalWrites:    atomic.LoadUint64(&w.totalWrites),
-		TotalBytes:     atomic.LoadUint64(&w.totalBytes),
-		TotalSyncs:     atomic.LoadUint64(&w.totalSyncs),
-		LastCheckpoint: atomic.LoadUint64(&w.lastCheckpoint),
+		Sequence:       w.sequence.Load(),
+		TotalWrites:    w.totalWrites.Load(),
+		TotalBytes:     w.totalBytes.Load(),
+		TotalSyncs:     w.totalSyncs.Load(),
+		LastCheckpoint: w.lastCheckpoint.Load(),
 		FileSize:       fileSize,
 	}
 }
@@ -620,5 +743,5 @@ func (w *WAL) Path() string {
 
 // Sequence returns the current sequence number.
 func (w *WAL) Sequence() uint64 {
-	return atomic.LoadUint64(&w.sequence)
+	return w.sequence.Load()
 }

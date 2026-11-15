@@ -20,7 +20,9 @@ import "sync/atomic"
 // are not needed here. Nodes never merge, so a node's key range only ever
 // shrinks, when it splits.
 type tree[K Key, V any, W word] struct {
-	root atomic.Pointer[header]
+	root   atomic.Pointer[header]
+	leaves slab[leaf[K, V, W]]
+	inners slab[inner[K, V, W]]
 }
 
 func newTree[K Key, V any, W word]() *tree[K, V, W] {
@@ -211,7 +213,8 @@ func (t *tree[K, V, W]) tryInsert(key K, val V) (old V, replaced, done bool) {
 		l.unlockUnchanged(v)
 		return old, false, false
 	}
-	sep, right := l.split(&f)
+	right := t.leaves.alloc()
+	sep := l.split(&f, right)
 	if keyLess(key, sep) {
 		p, _, _ := l.seek(key, int(l.n), v|lockedBit)
 		l.insertAt(p, int(l.n), key, val)
@@ -245,7 +248,8 @@ func (t *tree[K, V, W]) splitInner(in *inner[K, V, W], v uint64, parent *inner[K
 		in.unlockUnchanged(v)
 		return
 	}
-	sep, right := in.split(f)
+	right := t.inners.alloc()
+	sep := in.split(f, right)
 	if parent != nil {
 		parent.insertChild(pidx, sep, &right.header)
 		parent.unlock()
@@ -258,14 +262,19 @@ func (t *tree[K, V, W]) splitInner(in *inner[K, V, W], v uint64, parent *inner[K
 // growRoot puts a new root above the old one, which has just split into
 // itself and right. The caller holds the old root's latch, so readers that
 // reached it before the new root went up fail their check and start over.
+//
+// The swap is a compare-and-swap from old: Clear may have replaced the root
+// since the caller checked it, and then the split belongs to the discarded
+// tree. Storing unconditionally would put the cleared tree back and lose
+// whatever was written to the new one.
 func (t *tree[K, V, W]) growRoot(old *header, sep K, right *header) {
-	r := new(inner[K, V, W])
+	r := t.inners.alloc()
 	r.level = old.level + 1
 	r.n = 1
 	r.keys[0] = sep
 	r.children[0], r.children[1] = old, right
 	rebuildInline(&r.ik, r.keys[:1], 0)
-	t.root.Store(&r.header)
+	t.root.CompareAndSwap(old, &r.header)
 }
 
 // height is the number of levels, leaves included.

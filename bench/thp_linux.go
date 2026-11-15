@@ -5,6 +5,7 @@ package main
 import (
 	"bufio"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -62,4 +63,27 @@ func hugePagesKB() int {
 		}
 	}
 	return -1
+}
+
+// powerSource reports whether the machine runs on mains power. A laptop on
+// battery may cap its CPU's power, and every number with it, so the results
+// header records it: "AC", "battery", or "unknown" when the machine reports no
+// mains supply.
+func powerSource() string {
+	dirs, _ := filepath.Glob("/sys/class/power_supply/*")
+	mains := false
+	for _, d := range dirs {
+		t, _ := os.ReadFile(filepath.Join(d, "type"))
+		if strings.TrimSpace(string(t)) != "Mains" {
+			continue
+		}
+		mains = true
+		if on, _ := os.ReadFile(filepath.Join(d, "online")); strings.TrimSpace(string(on)) == "1" {
+			return "AC"
+		}
+	}
+	if mains {
+		return "battery"
+	}
+	return "unknown"
 }

@@ -211,7 +211,7 @@ func TestDifferentialString(t *testing.T) {
 func TestGrowth(t *testing.T) {
 	orders := map[string]func(i int) uint64{
 		"ascending":  func(i int) uint64 { return uint64(i) },
-		"descending": func(i int) uint64 { return uint64(1<<40 - i) },
+		"descending": func(i int) uint64 { return uint64(1)<<40 - uint64(i) },
 		"random":     func(i int) uint64 { return mix64(uint64(i)) },
 	}
 	for name, key := range orders {

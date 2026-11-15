@@ -10,8 +10,8 @@ import (
 // few dozen keys, few enough that one count over its inline keys finds the
 // place, and its header and inline keys share the first cache lines. With
 // 2-byte inline keys, the 16-byte header and 56 inline keys are exactly two
-// lines; a uint64->uint64 leaf is 1016 bytes, inside Go's 1024-byte size
-// class, and so is a uint64 internal node.
+// lines, when the node starts on a line, which slab.go sees to. A
+// uint64->uint64 leaf is 1016 bytes, and so is a uint64 internal node.
 const (
 	slots    = 56        // inline-key slots per node; the last is always padding
 	leafCap  = slots - 1 // entries per leaf
@@ -132,17 +132,27 @@ func (f *fences[K]) split(sep K) (left, right fences[K]) {
 	return
 }
 
-// inlineOf is the inline key of k in a node whose keys share plen bytes. A
-// uint64 key's window is one shift (Go defines shifts past the width as 0), so
-// that case inlines into every search; the others call keyWindow.
+// inlineOf is the inline key of k in a node whose keys share plen bytes.
+//
+// It doesn't inline: Go's inliner charges the call in the non-uint64 branch
+// even where that branch folds away. So the hot searches (leaf.seek,
+// inner.route, getGroup) test isU64 themselves and call inlineU64, whose one
+// shift inlines; only their other key types call out.
 func inlineOf[K Key, W word](k K, plen uint8) W {
-	var w uint64
-	if unsafe.Sizeof(k) == 8 {
-		w = *(*uint64)(unsafe.Pointer(&k)) << (8 * uint(plen))
-	} else {
-		w = keyWindow(k, int(plen))
+	if isU64[K]() {
+		return inlineU64[W](asU64(&k), plen)
 	}
-	return toInline[W](w)
+	return inlineWindow[K, W](k, plen)
+}
+
+// inlineU64 is the inline key of a uint64 key. Go defines shifts past the
+// width as 0, so a prefix of 8 or more bytes needs no test.
+func inlineU64[W word](k uint64, plen uint8) W {
+	return toInline[W](k << (8 * uint(plen)))
+}
+
+func inlineWindow[K Key, W word](k K, plen uint8) W {
+	return toInline[W](keyWindow(k, int(plen)))
 }
 
 func rebuildInline[K Key, W word](ik *[slots]W, keys []K, plen uint8) {
@@ -167,7 +177,12 @@ func rebuildInline[K Key, W word](ik *[slots]W, keys []K, plen uint8) {
 // have torn it. ok is false if that check failed. Callers holding the latch
 // pass the latched version and always get ok.
 func (l *leaf[K, V, W]) seek(key K, n int, v uint64) (pos int, found, ok bool) {
-	t := inlineOf[K, W](key, l.plen)
+	var t W
+	if isU64[K]() {
+		t = inlineU64[W](asU64(&key), l.plen)
+	} else {
+		t = inlineWindow[K, W](key, l.plen)
+	}
 	i := countLess(&l.ik, t)
 	if i >= n || l.ik[i] != t {
 		return min(i, n), false, true // no key ties: absent
@@ -273,14 +288,13 @@ func (l *leaf[K, V, W]) removeAt(pos, n int) {
 	l.n = uint16(n - 1)
 }
 
-// split moves the upper half of a full leaf into a new right sibling and
-// returns the separator, the right half's first key. Both halves get the
+// split moves the upper half of a full leaf into right, a new, zeroed leaf,
+// and returns the separator, the right half's first key. Both halves get the
 // prefix their new fences share, which is at least what the leaf had, and
 // their inline keys are cut again at it. The caller holds the leaf's latch.
-func (l *leaf[K, V, W]) split(f *fences[K]) (sep K, right *leaf[K, V, W]) {
+func (l *leaf[K, V, W]) split(f *fences[K], right *leaf[K, V, W]) (sep K) {
 	n := int(l.n)
 	mid := n / 2
-	right = new(leaf[K, V, W])
 	rn := copy(right.keys[:], l.keys[mid:n])
 	copy(right.vals[:], l.vals[mid:n])
 	clear(l.keys[mid:n])
@@ -293,7 +307,7 @@ func (l *leaf[K, V, W]) split(f *fences[K]) (sep K, right *leaf[K, V, W]) {
 	rebuildInline(&right.ik, right.keys[:rn], right.plen)
 	right.next = l.next
 	l.next = right // right is complete before anything can reach it
-	return sep, right
+	return sep
 }
 
 // ---- internal nodes ---------------------------------------------------------
@@ -302,7 +316,12 @@ func (l *leaf[K, V, W]) split(f *fences[K]) (sep K, right *leaf[K, V, W]) {
 // key: the number of separators <= key. Inline keys decide it but for a tie,
 // which compares the tied separators themselves.
 func (in *inner[K, V, W]) route(key K, n int, v uint64) (idx int, ok bool) {
-	t := inlineOf[K, W](key, in.plen)
+	var t W
+	if isU64[K]() {
+		t = inlineU64[W](asU64(&key), in.plen)
+	} else {
+		t = inlineWindow[K, W](key, in.plen)
+	}
 	i := countLess(&in.ik, t)
 	if i >= n || in.ik[i] != t {
 		return min(i, n), true
@@ -358,13 +377,13 @@ func (in *inner[K, V, W]) insertChild(idx int, sep K, child *header) {
 	in.n = uint16(n + 1)
 }
 
-// split moves the upper half of a full internal node into a new right sibling
-// and returns the separator that goes up, which neither half keeps.
-func (in *inner[K, V, W]) split(f *fences[K]) (sep K, right *inner[K, V, W]) {
+// split moves the upper half of a full internal node into right, a new, zeroed
+// internal node, and returns the separator that goes up, which neither half
+// keeps.
+func (in *inner[K, V, W]) split(f *fences[K], right *inner[K, V, W]) (sep K) {
 	n := int(in.n)
 	mid := n / 2
 	sep = in.keys[mid]
-	right = new(inner[K, V, W])
 	right.level = in.level
 	rn := copy(right.keys[:], in.keys[mid+1:n])
 	copy(right.children[:], in.children[mid+1:n+1])
@@ -375,7 +394,7 @@ func (in *inner[K, V, W]) split(f *fences[K]) (sep K, right *inner[K, V, W]) {
 	in.n, right.n = uint16(mid), uint16(rn)
 	rebuildInline(&in.ik, in.keys[:mid], in.plen)
 	rebuildInline(&right.ik, right.keys[:rn], right.plen)
-	return sep, right
+	return sep
 }
 
 func newLeaf[K Key, V any, W word]() *leaf[K, V, W] {

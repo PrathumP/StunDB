@@ -143,7 +143,12 @@ func (t *tree[K, V, W]) getGroup(g *group, keys []K, vals []V, found []bool) {
 		}
 		l := asLeaf[K, V, W](g.node[j])
 		c := l.count(leafCap)
-		tk := inlineOf[K, W](keys[j], l.plen)
+		var tk W
+		if isU64[K]() {
+			tk = inlineU64[W](asU64(&keys[j]), l.plen)
+		} else {
+			tk = inlineWindow[K, W](keys[j], l.plen)
+		}
 		i := countLess(&l.ik, tk)
 		if i < c && l.ik[i] == tk {
 			g.pos[j] = i

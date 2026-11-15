@@ -7,7 +7,8 @@ its post [*bbtree: fastest ordered map*](https://bbtree.xiangpeng.systems/post/)
 - **Inline keys behind a fence-derived prefix.** Each node keeps a dense
   array of 2-byte (integers, UUIDs) or 4-byte (strings) slices of its keys,
   taken after the bytes every key in the node shares. One cache line holds
-  32 of them, and a search reads a key only for the one candidate they leave.
+  32 two-byte ones, and a search reads a key only for the one candidate they
+  leave. Nodes are allocated so that they start on a cache line.
 - **A branchless count instead of a binary search.** A node is searched by
   counting its inline keys below the target, in AVX2 (`VPCMPGTW`,
   `VPMOVMSKB`, `POPCNT`) through Go's `simd/archsimd`.
@@ -159,6 +160,7 @@ err = db.Insert([]byte("user:1"), []byte("Alice"))
 GOEXPERIMENT=simd go test ./...       # AVX2 search
 go test ./...                          # portable search
 go test -race ./...                    # see below
+GOARCH=386 go test ./...               # 32-bit, where a string is 8 bytes
 go test -fuzz FuzzU64 ./internal/btree # differential fuzzing against a Go map
 go test -fuzz FuzzString ./internal/btree
 ```
@@ -179,6 +181,12 @@ go test -fuzz FuzzString ./internal/btree
   writers against readers with a lock (`race_on.go`). The layers above are
   race-checked against the same API, and the stress tests cover the
   optimistic paths in ordinary builds.
+- **Regression tests** (`clear_test.go`, `regression_test.go`,
+  `crash_test.go`) reproduce the bugs an adversarial review found: `Clear`
+  racing a root split, counts after `Clear`, stale and inconsistent
+  secondary indexes, a torn WAL tail hiding later writes, and partial bulk
+  inserts. `crash_test.go` kills a child process in the middle of a write and
+  recovers its WAL.
 
 ## Benchmarks
 
@@ -210,7 +218,8 @@ Microbenchmarks of the tree alone: `go test -bench . ./internal/btree`.
   experimental in Go 1.26.
 - **No `Len` in O(1)**, by design (a shared counter is contention);
   `kv.Store.Count` keeps a striped count.
-- **Scans are not snapshots**, and `Clear` is not atomic with concurrent
-  writers.
+- **Scans are not snapshots.** An entry present for a whole scan is seen
+  once; one written during it may or may not be. A write that races `Clear`
+  either lands before it or is discarded with the old contents.
 - The WAL records mutations and replays them; the tree itself is never
   written to disk.

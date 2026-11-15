@@ -156,11 +156,34 @@ The numbers fit together on purpose:
 - The 16-byte header and 56 two-byte inline keys are exactly 128 bytes, two
   cache lines. A search reads those two lines and, for a hit, the one key it
   lands on.
-- A `uint64 -> uint64` leaf is 1,016 bytes. Go's allocator rounds objects up
-  to size classes, and the class above 1,024 is 1,152. One byte over would
-  waste 128 bytes a node.
+- A `uint64 -> uint64` leaf is 1,016 bytes, inside the post's 1 KiB.
 - The last inline-key slot is always padding, so the search never needs to
   know the node's count. More on that below.
+
+The first bullet was false for the first version of this tree, and I didn't
+know it until an adversarial review measured it (see the section on the
+review below). Two cache lines means the node starts on a line. A node
+allocated with `new` doesn't: Go puts an 8-byte malloc header in front of
+every object over 512 bytes that holds pointers. Every node started 8 bytes
+past a line, and its 128 hot bytes spanned three lines. The 1,016-byte leaf
+fit Go's 1,024-byte size class only because 1,016 plus the 8-byte header is
+exactly 1,024.
+
+The fix is a slab allocator per tree, in `slab.go`. Objects over 32 KiB get
+their own span, start on a page boundary, and carry no malloc header, because
+the collector keeps their type in the span. So the slab allocates chunks of
+at least 64 KiB and carves nodes out of them, each padded to a multiple of 64
+bytes. Go generics can't size a padding array by a type parameter, so the
+slab builds the padded node type at run time with `reflect.StructOf`, which
+keeps the collector's pointer map correct. A tree's first 64 nodes of each
+kind are still allocated one by one, so a small map doesn't hold a 64 KiB
+chunk.
+
+At 10M `uint64` keys, aligned nodes made lookups 5% faster and batched
+lookups 13% faster, the same direction in every round of an alternating A/B
+run. Padding to 64 bytes also beats size-class rounding for the other key
+types: a string leaf of 1,568 bytes takes 1,600 bytes in a slab, against
+1,792 from the allocator.
 
 The tree is generic over the key: `~uint64`, `~[16]byte` (UUIDs, hashes), or
 `~string`. That rules out `[]byte` keys in the tree's API, and it is a real
@@ -186,8 +209,13 @@ for every comparison, only for the last one.
 Two bytes out of an eight-byte key sound like too few. They aren't, because the
 window doesn't start at byte zero. It starts after the bytes every key in the
 node shares, the node's **prefix**. In a 10M-entry tree of random `uint64`s,
-one leaf covers about 2^64 / 2^18, or 2^46, of the key space. Its keys share
-their first two bytes, and the next two bytes almost always tell them apart.
+one leaf covers about 2^64 / 2^18, or 2^46, of the key space. Three leaves in
+four sit inside one 2^48 block, so their keys share their first two bytes,
+and the next two bytes usually tell them apart. The fourth leaf crosses a 2^48
+boundary and shares only one byte. Its 16-bit window then spreads about 38 keys
+over roughly 64 values, and ties are common. Measured over the whole tree,
+11.5% of hits and 11.9% of misses tie on the inline key and fall back to a
+full-key compare. For `uint64` keys that compare is in the node and cheap.
 
 The prefix comes from the node's fences, the separator keys on either side of
 it in its ancestors. This is Bayer and Unterauer's prefix B-tree, and the post
@@ -281,8 +309,8 @@ archsimd.ClearAVXUpperBits()
 return c01 + (c2+c3)>>1
 ```
 
-That is four `VPCMPGTW` compares, three `VPMOVMSKB` byte movemasks, and three
-`POPCNT`s. AVX2 only compares signed integers, so inline keys are stored with
+That is four `VPCMPGTW` compares, then three byte-sign steps (a `VPCMPGTB`
+against zero and a `VPMOVMSKB` byte movemask each), and three `POPCNT`s. AVX2 only compares signed integers, so inline keys are stored with
 their sign bit flipped (`toInline` in `inline.go`), and a signed compare of two
 stored keys orders them as unsigned windows.
 
@@ -310,10 +338,14 @@ not. `archsimd.ClearAVXUpperBits()` at the end of each count emits
 before folding and counts the cost of every arm. A generic helper that handles
 three key types is never inlined, and an uninlined call on every level of
 every search is measurable. The fix was structural. `countLess` is a single
-call, `inlineOf` handles the `uint64` window with one shift and calls out only
-for the other kinds, and the common leaf hit uses `==`, which Go compiles
-natively for each shape. Each hot helper ends up with at most one out-of-line
-call.
+call, and the common leaf hit uses `==`, which Go compiles natively for each
+shape. The first version also had `inlineOf` handle the `uint64` window with
+one shift and call out only for the other kinds, and I wrote here that it
+inlined. The review showed it doesn't: the call in the dead branch alone puts
+it at 129 against a budget of 80. So `leaf.seek`, `inner.route`, and the
+batch's leaf pass now test for `uint64` themselves and do the shift in place.
+`go tool objdump` confirms that their only call on the `uint64` path is
+`countSlots`.
 
 Builds without `GOEXPERIMENT=simd`, or without AVX2, use a branchless binary
 search (as in Khuong and Morin's study of array layouts) instead. I also wrote a SWAR
@@ -576,9 +608,122 @@ here waits on about 3.5 dependent DRAM misses at 94 ns each, roughly 330 ns,
 and the search code fills the rest.
 
 The baselines pay the same penalty, which is why the ratios hold while the
-nanoseconds don't. The same arithmetic bounds the threaded numbers. At about
-30M lookups a second and 3.5 lines each from DRAM, the laptop's two memory
-channels are the limit, not contention. No lookup writes shared memory.
+nanoseconds don't.
+
+The first version of this post said the same arithmetic bounds the threaded
+numbers: 30M lookups a second at 3.5 lines each, against the laptop's two
+memory channels. The review measured random line reads from DRAM on this
+machine at about 200M lines a second with 8 or more threads, twice what that
+arithmetic needs. So bandwidth is not shown to be the limit. Without `perf` I
+can't count the lines a lookup really fetches, and I don't know what stops
+16-thread lookups at their current rate. Contention is still ruled out by
+design, because no lookup writes shared memory.
+
+## What an adversarial review broke
+
+After the first version shipped, I ran an adversarial review. Four agents each
+took one part of the system, with one rule: a finding counts only if a run
+proves it, with a failing test, a repro program, or command output. Each
+worked in its own git worktree. I then reran every finding myself and kept
+only the ones that reproduced. All of them did.
+
+| area | agent's scope |
+|---|---|
+| tree concurrency | the lock-free reads, splits, batches, scans, and `Clear` |
+| keys and search | key encoding, prefixes, and the AVX2 and portable counts |
+| storage layers | `kv.Store`, the WAL, and the secondary indexes |
+| performance claims | the benchmark harness and every number in the docs |
+
+### Bugs
+
+- **`Clear` racing a root split undid the `Clear`.** `growRoot` checked that
+  the old root was still the root, split it, then stored the new root without
+  checking again. A `Clear` in between was overwritten: the cleared entries
+  came back, and a key inserted after `Clear` returned disappeared. The
+  repro failed in 81 to 88% of its trials. `growRoot` now installs the new root with a
+  compare-and-swap from the old one, so a split that lost the race stays in
+  the discarded tree.
+- **`kv.Store.Count` drifted after `Clear`, and could go negative.** `Clear`
+  swapped the tree, then reset the striped counter, and writers that
+  straddled the two left the count permanently wrong. Now the tree and its
+  count live in one generation behind an atomic pointer, and `Clear` installs
+  a new generation. A writer that races `Clear` lands, count and all, in the
+  generation that `Clear` discarded.
+- **A torn WAL tail hid every later write.** Recovery stopped at a torn entry
+  but left it in the file, and the file is opened for appending. Writes
+  acknowledged after the restart, fsync and all, went in behind the torn
+  entry, and the next restart never reached them. A test that kills a child
+  process with `SIGKILL` in the middle of a write reproduced it. Opening the
+  WAL now truncates the file after the last whole entry. It also checks every
+  length field against the rest of the file, so a damaged length can't make
+  recovery allocate gigabytes.
+- **`DurableBTree.BulkInsert` was atomic only in its comment.** A crash in
+  the middle of a 2M-key batch recovered 78K of its keys, and readers saw
+  batches half applied. A batch is now one WAL entry with one checksum, so
+  recovery replays all of it or none. A sequence counter, odd while a batch
+  applies, lets `Find`, `GetRange`, and `Count` retry until they see all of
+  a batch or none of it. That keeps reads free of writes to shared memory.
+- **The secondary indexes went stale.** Overwriting a record with `Put` left
+  the old record's index entries behind. Re-putting a record with its own
+  unique value was rejected as a duplicate of itself. Concurrent writers left
+  index entries pointing at missing records, and a rejected `Put` could delete
+  the record that was already there. These bugs predate the rewrite. Writes
+  to `IndexedBTree` now go through one mutex, as the WAL layer's already did,
+  because a write changes several trees that have to agree. Each write checks
+  every unique constraint first, ignoring the record's own entries, then
+  replaces the old record's index entries with the new ones.
+- **`ForEach` and `Scan` handed out the stored value slices.** A caller that
+  wrote to one changed the store, and in `DurableBTree` the in-memory data
+  then disagreed with what recovery would rebuild. They now hand out copies.
+- **String keys were broken on 32-bit platforms.** `kindOf` told a `uint64`
+  key from a string by its size. On `GOARCH=386` a string header is 8 bytes,
+  the same size and alignment as a `uint64`, so string maps compared string
+  headers as integers. On 32-bit platforms, `key_kind32.go` now asks
+  `reflect` for the key's kind instead. 64-bit builds still fold the size test
+  at compile time. The tree's tests didn't catch this because they didn't
+  compile on 386. They do now, and the README lists a 386 test run.
+- **Nodes weren't line-aligned, and `inlineOf` wasn't inlined.** The node
+  layout section above covers both.
+
+### False claims and harness flaws
+
+- The README said one cache line holds 32 inline keys. That is true only for
+  2-byte keys. A line holds 16 of the 4-byte string keys.
+- This post listed the AVX2 count's instructions and left out three
+  `VPCMPGTB`s.
+- The header of each results file read `GOAMD64` from the environment at run
+  time, not from the build. It now reads the build settings with
+  `debug.ReadBuildInfo`.
+- The `-thp` flag claimed to back every map with huge pages before timing it.
+  It collapses each map's heap after the timed build, so insert cells run on
+  ordinary pages for every map. That is even between maps, but unlike the
+  post's runs.
+- `BenchmarkInsertU64` grew a map from empty, so its result depended on
+  `b.N`, from 120 to 456 ns. It now inserts into a map that starts at 10M
+  entries.
+- The prefix and bandwidth claims, corrected in their sections above.
+
+### What held up
+
+- **Concurrency.** A 60-second stress test ran 74M mixed operations over all
+  three key types with no wrong value. Another ran 362K scans against batch
+  writers, and every key present for a whole scan was seen exactly once, in
+  order.
+- **Key handling.** New fuzzers and differential tests over adversarial
+  string shapes passed in both builds: zero and `0xff` runs, and shared
+  prefixes of 248 to 259 bytes, around the prefix clamp at 255. So did
+  `uint64` and UUID keys at the extremes. All three counts, AVX2, branchless,
+  and scalar, agreed on every 16-bit target at every node size.
+- **Benchmark fairness.** Every map gets the same keys, the same probes, and
+  the same huge-page treatment, with a 49.96% hit rate for both StunDB and
+  google/btree. The comparator wrappers given to the baselines cost them at
+  most 5%. The memory figures reproduced exactly.
+- **`VZEROUPPER`.** Removing it made batched lookups about three times
+  slower, as this post says.
+
+Every bug above now has a regression test: `clear_test.go`,
+`regression_test.go` in `kv`, `wal`, and `index`, and `crash_test.go`, which
+kills a child process mid-write and recovers its WAL.
 
 ## Where the port falls short
 
@@ -624,6 +769,7 @@ export GOEXPERIMENT=simd GOAMD64=v3
 go test ./...                            # AVX2 search
 GOEXPERIMENT= go test ./...              # portable search
 go test -race ./...                      # race build, map serialized
+GOARCH=386 go test ./...                 # 32-bit, where a string is 8 bytes
 go test -fuzz FuzzU64 ./internal/btree
 
 cd bench

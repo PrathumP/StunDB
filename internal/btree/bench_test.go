@@ -95,9 +95,17 @@ func BenchmarkScan100U64(b *testing.B) {
 	}
 }
 
+// BenchmarkInsertU64 inserts fresh keys into a map that starts with
+// STUNDB_BENCH_N entries, so the result doesn't depend on b.N the way growing
+// a map from empty does. The map grows by b.N while it runs.
 func BenchmarkInsertU64(b *testing.B) {
+	n := benchN()
 	m := New[uint64, uint64]()
-	i := uint64(0)
+	for i := range n {
+		k := mix64(uint64(i))
+		m.Insert(k, k)
+	}
+	i := uint64(n)
 	for b.Loop() {
 		k := mix64(i)
 		m.Insert(k, k)

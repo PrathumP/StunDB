@@ -31,20 +31,31 @@ leaf:   | header 16 B | 56 inline keys | next | 55 keys | 55 values |
 inner:  | header 16 B | 56 inline keys | 56 children   | 55 separator keys |
 ```
 
-For `uint64` keys, the header and the 2-byte inline keys are exactly two
-cache lines, and a `uint64 -> uint64` leaf is 1016 bytes, inside Go's
-1024-byte size class (the post's 1 KiB leaves). The keys sit after the
-inline keys: a search reads them only for the one candidate the inline keys
-leave. Internal nodes keep their separators' full keys at the end, read only
-on a tie.
+For `uint64` keys, the header and the 2-byte inline keys are 128 bytes, and
+a `uint64 -> uint64` leaf is 1016 bytes (the post's 1 KiB leaves). The keys
+sit after the inline keys: a search reads them only for the one candidate the
+inline keys leave. Internal nodes keep their separators' full keys at the
+end, read only on a tie.
+
+Those 128 bytes are two cache lines only if the node starts on a line, and a
+node allocated with `new` doesn't: Go puts an 8-byte malloc header in front
+of every object over 512 bytes that holds pointers, so such a node starts 8
+bytes past a line, and its first 128 bytes span three lines. So each tree
+allocates nodes from a slab ([slab.go](../internal/btree/slab.go)): chunks
+of at least 64 KiB, which Go page-aligns and gives no malloc header, with
+each node padded to a multiple of 64 bytes. At 10M `uint64` keys that made
+lookups 5% faster and batched lookups 13% faster. Padding to 64 bytes also
+replaces Go's size-class rounding: a string leaf takes 1,600 bytes in a slab
+against 1,792 on its own. A tree's first 64 nodes of each kind are allocated
+one by one, so small trees don't each hold a chunk.
 
 ### Inline keys and prefixes (principle 1)
 
 Every node keeps, beside its keys, a dense array of **inline keys**: a small
 fixed-width slice of each key's order-preserving byte encoding
 ([key.go](../internal/btree/key.go), [inline.go](../internal/btree/inline.go)).
-One cache line holds 32 of them, so a node is searched without touching its
-keys, and string keys without following a pointer to the heap. A tie (equal
+One cache line holds 32 two-byte or 16 four-byte inline keys, so a node is
+searched without touching its keys, and string keys without following a pointer to the heap. A tie (equal
 inline keys) falls back to the full keys, and a string that ends within the
 window is settled by its length alone (bbtree's D36).
 
@@ -62,15 +73,22 @@ prefix too. A node only stores its length, set when the node is created by a
 split. Nodes never merge, so a node's fences only narrow and its prefix only
 grows.
 
-With the prefix stripped, 2 bytes distinguish the keys of a leaf of random
-`uint64`s: a leaf of a 10M-entry tree covers about 2^46 of the key space, and
-its keys share their first two bytes.
+With the prefix stripped, 2 bytes usually distinguish the keys of a leaf of
+random `uint64`s. A leaf of a 10M-entry tree covers about 2^46 of the key
+space. Three leaves in four sit inside one 2^48 block and share their first
+two bytes. The fourth crosses a 2^48 boundary, shares only one byte, and its
+16-bit window spreads its ~38 keys over about 64 values. Measured at 10M
+keys, 11.5% of hits and 11.9% of misses tie on the inline key and read full
+keys; for `uint64`s that is one compare in the node.
 
 Go has no specialization, but it compiles a generic function once per GC
 shape, and `uint64`, `[16]byte` and `string` are three shapes. Within each
 instantiation `unsafe.Sizeof` of the key is a constant, so a
 `switch kindOf[K]()` folds away and each key type gets its own node code at
-no run-time cost.
+no run-time cost. On 32-bit platforms a string is 8 bytes, the size and
+alignment of a `uint64`, so there `key_kind32.go` asks `reflect` for the
+key's kind instead: correct, and a call per operation, on platforms the tree
+is not tuned for.
 
 ### Searching a node (principle 2)
 
@@ -92,9 +110,12 @@ your friend*:
   batched lookups three times slower.
 - **Inlining.** Go's inliner charges every arm of a `switch` on the key type
   before constant folding, so a generic helper that handles three key types
-  is never inlined. The hot helpers handle `uint64` inline and call out for
-  the rest, and the leaf's common hit is decided by `==`, which Go compiles
-  natively for each shape.
+  is never inlined. Even `inlineOf`, which is one shift for `uint64`, costs
+  129 against a budget of 80 because of the call in its other branch. So
+  the hot searches (`leaf.seek`, `inner.route`, the batch's leaf pass) test
+  for `uint64` themselves and do the shift in place; their only call on the
+  `uint64` path is the count. The leaf's common hit is decided by `==`,
+  which Go compiles natively for each shape.
 
 ### Concurrency (principle 3)
 
@@ -116,6 +137,9 @@ from the root.
   version their descent read. An insert latches its leaf. Full internal
   nodes are split on the way down (Leis et al.'s B-tree), so a split latches
   the node and its parent and never climbs back up.
+- **Clear** swaps in an empty root. A root split that was already under way
+  installs its new root by compare-and-swap from the old root, so a split of
+  the discarded tree never puts it back.
 - **Memory reclamation** is the garbage collector's. bbtree keeps freed
   nodes on free lists so that a late reader still reads a node (type-stable
   pages). In Go a reader that holds a pointer keeps the node alive, so there
@@ -160,7 +184,15 @@ lookups trades memory bandwidth for latency and hides what the layout does.
 
 `kv.Store` is `btree.Map[string, []byte]` with copies in and out, inclusive
 ranges and a striped entry count. Lookups view the caller's `[]byte` as a
-string without copying it (`btree.BytesKey`). Inserts copy key and value.
+string without copying it (`btree.BytesKey`). Inserts copy key and value, and
+every read, scans included, hands out copies, so no caller can change stored
+bytes.
+
+The map and its count live together in a generation, and `Clear` installs a
+new one. A writer works on the generation it loaded, so one that races `Clear`
+lands, count and all, in the discarded generation. Resetting a shared counter
+instead would leave it permanently off by the writes that straddled the
+reset.
 
 It replaces the old hash-sharded wrapper. Sharding was there to give a
 single-lock tree write concurrency, and it cost ordered scans: a range had to
@@ -176,9 +208,17 @@ store. Unique indexes store `indexKey -> primaryKey`; non-unique ones store
 `KeyExtractor` functions. The built-in `JSONFieldExtractor` is a small byte
 scanner, not a JSON parser.
 
+A write changes the primary store and every index, and those changes have to
+agree, so `IndexedBTree` serializes writers with one mutex, as the WAL layer
+does. Each write reads the record it replaces, checks every unique constraint
+before changing anything, and then replaces the old record's index entries
+with the new one's. Readers take no write lock, so a reader can see a write
+applied to the primary store before an index, or the other way round.
+
 ## Write-ahead log (`internal/wal`)
 
 `internal/wal` logs every mutation before applying it to the in-memory store
 (see [DURABILITY.md](DURABILITY.md)). Writers are serialized, so the log's
 order is the order the store sees, and replay rebuilds the same state.
-Readers take no lock.
+Readers take no lock. A `BulkInsert` is one log entry, so recovery restores
+all of it or none, and point reads, ranges and counts see all of it or none.
