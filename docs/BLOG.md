@@ -575,8 +575,10 @@ from the layout and checked against timings, not measured directly.
 
 ## Results
 
-All numbers are at 10M entries, one thread, on the 4800H, from
-`bench/results/ryzen-4800h-20261103.md`. Each ratio is the speedup over the
+All numbers in this section are from the first version of the rewrite, at
+10M entries, one thread, on the 4800H, from
+`bench/results/ryzen-4800h-20261103.md`. The section after the review gives
+the current code's numbers. Each ratio is the speedup over the
 baseline on the same machine: google/btree here, std's `BTreeMap` for the post.
 Batched calls are in brackets.
 
@@ -725,18 +727,53 @@ Every bug above now has a regression test: `clear_test.go`,
 `regression_test.go` in `kv`, `wal`, and `index`, and `crash_test.go`, which
 kills a child process mid-write and recovers its WAL.
 
+## Results after the review, on server CPUs
+
+The laptop kept dying before the benchmark rerun could finish: twice it lost
+power partway through an hour-long run. The first time, the whole run had been
+on battery, which caps a laptop's CPU, so its numbers were thrown out. The
+harness now records the power source in every results header and warns on
+battery.
+
+So the current code was measured on GitHub Actions instead. Pushing a
+`bench-*` tag runs `bench/run-all.sh` on two standard runners at once and
+publishes the tables as a prerelease. The two VMs landed on different
+processors, an AMD EPYC 9V74 (Zen 4) and an Intel Xeon 6975P-C, each a
+4-vCPU slice. All the maps in one run share a VM, so the ratios are fair. The
+nanoseconds belong to a shared server and compare with nothing else.
+
+| keys | get: EPYC · Xeon · post | insert: EPYC · Xeon · post | update: EPYC · Xeon · post | scan: EPYC · Xeon · post |
+|---|---|---|---|---|
+| `uint64` | 1.9× (5.8×) · 2.4× (7.6×) · 2.4× (3.6×) | 1.6× (2.5×) · 1.6× (3.0×) · 1.5× (2.1×) | 1.7× · 1.9× · 2.3× | 1.7× · 1.5× · 2.7× |
+| UUID | 3.7× (8.3×) · 3.2× (9.3×) · 2.8× (3.9×) | 2.6× (3.9×) · 2.1× (3.6×) · 2.1× (2.7×) | 3.1× · 2.7× · 2.5× | 2.3× · 1.7× · 2.3× |
+| Wikipedia titles | 2.2× (3.0×) · 2.0× (2.9×) · 1.7× (2.4×) | 1.8× (2.4×) · 1.7× (2.5×) · 1.5× (1.9×) | 2.1× · 2.0× · 1.6× | 2.5× · 1.9× · 1.7× |
+| JSON keys | 3.8× (6.6×) · 3.7× (6.9×) · 4.1× (6.5×) | 2.4× (3.7×) · 2.5× (3.7×) · 2.3× (3.6×) | 3.3× · 3.3× · 3.4× | 3.0× · 2.3× · 2.0× |
+
+Single lookups land where they did on the laptop and where the post's do.
+Batched lookups of `uint64` and UUID keys are the surprise: 5.8 to 9.3 times
+google/btree, against 3.4 and 5.1 on the laptop and 3.6 and 3.9 in the post.
+I haven't measured why. My guess is that these server cores keep more memory
+requests in flight, which is exactly what group prefetching feeds on.
+
+At 4 threads, the most these runners have, `uint64` lookups reach 10.8M and
+11.2M a second, 7.6 to 8.8 times the skiplist. Updates reach 9.1M and 9.3M,
+7.5 to 7.9 times a tree behind an `RWMutex`. Memory came out the same on both
+VMs: 27.5 bytes per `uint64` entry, and 10 to 14% above google/btree across
+the four key sets, down from 11 to 24% before the slab allocator.
+
 ## Where the port falls short
 
-- `uint64` scans and updates trail the post's ratios: 1.6 against 2.7 times,
-  and 1.9 against 2.3 times.
+- `uint64` scans and updates trail the post's ratios: 1.5 to 1.7 against 2.7
+  times, and 1.7 to 1.9 against 2.3 times.
 - Nodes never merge, so deleting entries returns no memory until `Clear`.
 - The SIMD search is AVX2 only. The post's AVX-512 compare
   (`_mm512_cmplt_epu16_mask`) has no counterpart here, and neither does NEON.
 - The fast path depends on `GOEXPERIMENT=simd`, which is experimental.
 - The race detector doesn't check the optimistic paths, only the stress tests do.
-- Memory per entry is 11 to 24% above Go's B-trees, where bbtree is close to its
-  baseline.
-- The threaded UUID and JSON tables should be rerun with the GC fix.
+- Memory per entry is 10 to 14% above Go's B-trees, where bbtree is close to
+  its baseline.
+- The current code has no results past 4 threads. The 8- and 16-thread
+  figures come from the first version, on the laptop.
 
 ## What carried over and what didn't
 
@@ -776,6 +813,9 @@ cd bench
 ./fetch-data.sh                          # Wikipedia titles, 110 MB
 go run . -mode single -keys u64,uuid     # one cell group
 ./run-all.sh                             # every table, about an hour
+
+# or on GitHub's runners, publishing the tables as a prerelease
+git tag bench-$(date +%Y%m%d) && git push origin bench-$(date +%Y%m%d)
 ```
 
 The design is documented piece by piece in
