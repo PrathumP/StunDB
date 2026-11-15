@@ -18,9 +18,42 @@ its post [*bbtree: fastest ordered map*](https://bbtree.xiangpeng.systems/post/)
 - **Batched lookups and inserts** that overlap their cache misses, lanes
   moving down the tree in lockstep with software prefetches.
 
-On top of it sit a byte-keyed store, secondary indexes and a write-ahead log.
+On top of it sit a byte-keyed store, secondary indexes and a write-ahead log:
+
+- **Write-ahead log.** Every mutation is logged with a CRC32 checksum before
+  it is applied, and a restart replays the log. Recovery cuts off an entry
+  torn by a crash, so writes acknowledged after the restart survive the next
+  one, and a bulk insert is one entry, recovered whole or not at all.
+- **Secondary indexes**, unique or not, on fields pulled out of each record,
+  kept consistent with the records under concurrent writers.
+
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) explains each technique, how it
 maps from Rust to Go, and where the Go version differs and why.
+[docs/BLOG.md](docs/BLOG.md) ([as a page](docs/blog.html)) tells how the
+project was built, what an adversarial review broke, and what was fixed.
+
+## At a glance
+
+At 10M entries, measured on two GitHub Actions runners (details below):
+
+| | |
+|---|---|
+| Lookups vs google/btree | **1.9–3.8× faster**, up to **9.3×** batched |
+| Lookups on 4 vCPUs | **11M a second**, 7.6–8.8× a lock-free skiplist |
+| Updates on 4 vCPUs | 7.5–7.9× a B-tree behind an `RWMutex` |
+| Memory per `uint64` entry | 27.5 bytes (bbtree: 27.1) |
+
+The store's other layers, measured on a Ryzen 7 4800H laptop:
+
+| | |
+|---|---|
+| WAL appends, without fsync | about 800K a second (1,243 ns each) |
+| Secondary index lookup vs full scan, 100K records | 387 ns against 5.9 ms, about 15,000× |
+
+```bash
+GOEXPERIMENT=simd GOAMD64=v3 go test -run x -bench WALAppendInsert ./internal/wal
+GOEXPERIMENT=simd GOAMD64=v3 go test -run x -bench Comparison ./internal/index
+```
 
 ## Results
 
