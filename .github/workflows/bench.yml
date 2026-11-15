@@ -1,0 +1,89 @@
+name: benchmarks
+
+# Runs the benchmark suite (bench/run-all.sh) on GitHub's standard Linux
+# runners: 4 vCPUs and 16 GB for public repositories.
+#
+# To run it and publish the tables as a prerelease, push a tag:
+#
+#	git tag bench-20261116 && git push origin bench-20261116
+#
+# "Run workflow" on the Actions tab runs it too, and keeps the tables as
+# artifacts only.
+#
+# Two runs go to two VMs at once; runners are shared machines, and how far the
+# two disagree shows the noise. Compare ratios between maps within one run,
+# not these numbers with ones from other hardware.
+
+on:
+  push:
+    tags: ["bench-*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bench:
+    strategy:
+      fail-fast: false
+      matrix:
+        run: [1, 2]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: bench/go.sum
+
+      - name: Describe the machine
+        run: |
+          lscpu | grep -E '^(Model name|CPU\(s\)|L3 cache)'
+          free -g | head -2
+          echo "THP: $(cat /sys/kernel/mm/transparent_hugepage/enabled)"
+          grep -qw avx2 /proc/cpuinfo || { echo "::error::this runner has no AVX2"; exit 1; }
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/stundb-bench
+          key: enwiki-titles-v1
+
+      - name: Test the AVX2 build
+        env:
+          GOEXPERIMENT: simd
+          GOAMD64: v3
+        run: go test -count=1 ./internal/btree
+
+      - name: Run the benchmarks
+        env:
+          STUNDB_RESULTS: actions-run${{ matrix.run }}
+        run: ./bench/run-all.sh -threads 1,2,4 2>&1 | tee bench/results/actions-run${{ matrix.run }}.log
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: results-run${{ matrix.run }}
+          path: bench/results/actions-run${{ matrix.run }}.*
+
+  publish:
+    needs: bench
+    if: startsWith(github.ref, 'refs/tags/bench-')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: results
+          merge-multiple: true
+
+      - name: Publish the tables as a prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" results/* \
+            --repo "$GITHUB_REPOSITORY" --prerelease \
+            --title "Benchmarks: $GITHUB_REF_NAME" \
+            --notes "bench/run-all.sh on GitHub's ubuntu-24.04 runners, two VMs (run1, run2), commit $GITHUB_SHA. Compare ratios between maps within a run."

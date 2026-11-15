@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
@@ -34,7 +35,7 @@ func main() {
 		ops     = flag.Int("ops", 4_000_000, "operations per one-thread cell")
 		dur     = flag.Duration("dur", time.Second, "duration of each threaded cell")
 		threads = flag.String("threads", "1,2,4,8,12,16", "thread counts")
-		thp     = flag.Bool("thp", true, "back every map with huge pages before timing it (see thp_linux.go)")
+		thp     = flag.Bool("thp", true, "back every map with huge pages after building it, before timing its reads and updates; inserts are timed on whatever pages the build gets (see thp_linux.go)")
 		wiki    = flag.String("wiki", filepath.Join(home, ".cache/stundb-bench/enwiki-latest-all-titles-in-ns0.gz"), "Wikipedia titles dump")
 		out     = flag.String("out", "results.csv", "CSV file the cells are appended to")
 	)
@@ -57,8 +58,12 @@ func main() {
 		c.out = f
 	}
 	runtime.GOMAXPROCS(max(runtime.NumCPU(), slicesMax(c.threads)))
-	fmt.Printf("<!-- %s, GOMAXPROCS=%d, SIMD=%v, %s %s, thp=%v -->\n", cpuName(), runtime.GOMAXPROCS(0),
-		btree.SIMDEnabled(), runtime.Version(), os.Getenv("GOAMD64"), *thp)
+	power := powerSource()
+	if power == "battery" {
+		fmt.Fprintln(os.Stderr, "warning: running on battery; a laptop may cap its CPU, and every number with it")
+	}
+	fmt.Printf("<!-- %s, GOMAXPROCS=%d, SIMD=%v, %s, %s, thp=%v, power=%s -->\n", cpuName(), runtime.GOMAXPROCS(0),
+		btree.SIMDEnabled(), runtime.Version(), buildSettings(), *thp, power)
 
 	modes := []string{*mode}
 	if *mode == "all" {
@@ -149,4 +154,24 @@ func cpuName() string {
 func fail(err error) {
 	fmt.Fprintln(os.Stderr, err)
 	os.Exit(1)
+}
+
+// buildSettings reports how the binary was built: GOAMD64 and GOEXPERIMENT as
+// the compiler saw them, not as the environment has them now.
+func buildSettings() string {
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return "build settings unknown"
+	}
+	var parts []string
+	for _, s := range info.Settings {
+		switch s.Key {
+		case "GOAMD64", "GOEXPERIMENT":
+			parts = append(parts, s.Key+"="+s.Value)
+		}
+	}
+	if len(parts) == 0 {
+		return "GOAMD64 unset"
+	}
+	return strings.Join(parts, " ")
 }

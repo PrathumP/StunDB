@@ -1,0 +1,340 @@
+single,u64,stundb,update,1,436.83,ns/op
+single,u64,stundb,scan100,1,1209.37,ns/op
+single,u64,stundb,insert,1,409.76,ns/op
+single,u64,stundb,get,1,362.50,ns/op
+single,u64,stundb (batched),insert,1,257.66,ns/op
+single,u64,stundb (batched),get,1,118.70,ns/op
+single,u64,google/btree,scan100,1,2022.41,ns/op
+single,u64,google/btree,insert,1,648.02,ns/op
+single,u64,google/btree,get,1,689.60,ns/op
+single,u64,google/btree,update,1,747.88,ns/op
+single,u64,tidwall/btree,scan100,1,1598.53,ns/op
+single,u64,tidwall/btree,insert,1,737.76,ns/op
+single,u64,tidwall/btree,get,1,687.15,ns/op
+single,u64,tidwall/btree,update,1,688.90,ns/op
+single,u64,skipmap,insert,1,3061.02,ns/op
+single,u64,skipmap,get,1,2633.86,ns/op
+single,u64,skipmap,update,1,2745.38,ns/op
+single,u64,Go map,insert,1,153.37,ns/op
+single,u64,Go map,get,1,71.40,ns/op
+single,u64,Go map,update,1,80.22,ns/op
+single,uuid,stundb,scan100,1,1376.06,ns/op
+single,uuid,stundb,insert,1,500.13,ns/op
+single,uuid,stundb,get,1,345.42,ns/op
+single,uuid,stundb,update,1,409.70,ns/op
+single,uuid,stundb (batched),insert,1,330.30,ns/op
+single,uuid,stundb (batched),get,1,151.89,ns/op
+single,uuid,google/btree,insert,1,1275.82,ns/op
+single,uuid,google/btree,get,1,1265.03,ns/op
+single,uuid,google/btree,update,1,1249.50,ns/op
+single,uuid,google/btree,scan100,1,3178.06,ns/op
+single,uuid,tidwall/btree,insert,1,1319.39,ns/op
+single,uuid,tidwall/btree,get,1,1175.74,ns/op
+single,uuid,tidwall/btree,update,1,1256.26,ns/op
+single,uuid,tidwall/btree,scan100,1,2645.28,ns/op
+single,uuid,skipmap,insert,1,3006.03,ns/op
+single,uuid,skipmap,get,1,2729.92,ns/op
+single,uuid,skipmap,update,1,2692.92,ns/op
+single,uuid,Go map,insert,1,246.98,ns/op
+single,uuid,Go map,get,1,100.15,ns/op
+single,uuid,Go map,update,1,116.24,ns/op
+single,wiki-titles,stundb,insert,1,1037.25,ns/op
+single,wiki-titles,stundb,get,1,796.94,ns/op
+single,wiki-titles,stundb,update,1,844.79,ns/op
+single,wiki-titles,stundb,scan100,1,1725.05,ns/op
+single,wiki-titles,stundb (batched),insert,1,781.68,ns/op
+single,wiki-titles,stundb (batched),get,1,592.78,ns/op
+single,wiki-titles,google/btree,insert,1,1843.95,ns/op
+single,wiki-titles,google/btree,get,1,1749.29,ns/op
+single,wiki-titles,google/btree,update,1,1785.69,ns/op
+single,wiki-titles,google/btree,scan100,1,4218.01,ns/op
+single,wiki-titles,tidwall/btree,insert,1,2094.46,ns/op
+single,wiki-titles,tidwall/btree,get,1,1768.11,ns/op
+single,wiki-titles,tidwall/btree,update,1,1878.16,ns/op
+single,wiki-titles,tidwall/btree,scan100,1,3041.64,ns/op
+single,wiki-titles,skipmap,insert,1,4865.09,ns/op
+single,wiki-titles,skipmap,get,1,4027.35,ns/op
+single,wiki-titles,skipmap,update,1,3948.89,ns/op
+single,wiki-titles,Go map,insert,1,490.55,ns/op
+single,wiki-titles,Go map,get,1,138.64,ns/op
+single,wiki-titles,Go map,update,1,191.72,ns/op
+single,json,stundb,insert,1,718.21,ns/op
+single,json,stundb,get,1,478.00,ns/op
+single,json,stundb,update,1,545.74,ns/op
+single,json,stundb,scan100,1,1453.96,ns/op
+single,json,stundb (batched),insert,1,477.54,ns/op
+single,json,stundb (batched),get,1,274.11,ns/op
+single,json,google/btree,insert,1,1742.24,ns/op
+single,json,google/btree,get,1,1807.05,ns/op
+single,json,google/btree,update,1,1800.42,ns/op
+single,json,google/btree,scan100,1,4312.85,ns/op
+single,json,tidwall/btree,scan100,1,3049.23,ns/op
+single,json,tidwall/btree,insert,1,1896.88,ns/op
+single,json,tidwall/btree,get,1,1909.19,ns/op
+single,json,tidwall/btree,update,1,1881.53,ns/op
+single,json,skipmap,update,1,3311.77,ns/op
+single,json,skipmap,insert,1,4016.90,ns/op
+single,json,skipmap,get,1,3678.80,ns/op
+single,json,Go map,get,1,130.55,ns/op
+single,json,Go map,update,1,176.98,ns/op
+single,json,Go map,insert,1,325.77,ns/op
+memory,u64,stundb,bytes/entry,1,27.52,B
+memory,u64,google/btree,bytes/entry,1,24.67,B
+memory,u64,tidwall/btree,bytes/entry,1,24.65,B
+memory,u64,skipmap,bytes/entry,1,88.37,B
+memory,u64,Go map,bytes/entry,1,30.26,B
+memory,uuid,stundb,bytes/entry,1,39.61,B
+memory,uuid,google/btree,bytes/entry,1,36.08,B
+memory,uuid,tidwall/btree,bytes/entry,1,36.21,B
+memory,uuid,skipmap,bytes/entry,1,104.37,B
+memory,uuid,Go map,bytes/entry,1,44.73,B
+memory,wiki-titles,stundb,bytes/entry,1,68.02,B
+memory,wiki-titles,google/btree,bytes/entry,1,61.64,B
+memory,wiki-titles,tidwall/btree,bytes/entry,1,61.54,B
+memory,wiki-titles,skipmap,bytes/entry,1,129.57,B
+memory,wiki-titles,Go map,bytes/entry,1,69.72,B
+memory,json,stundb,bytes/entry,1,53.36,B
+memory,json,google/btree,bytes/entry,1,46.96,B
+memory,json,tidwall/btree,bytes/entry,1,46.86,B
+memory,json,skipmap,bytes/entry,1,115.71,B
+memory,json,Go map,bytes/entry,1,55.10,B
+threads,u64,stundb,insert,1,1.90,Mops/s
+threads,u64,stundb,get,1,2.11,Mops/s
+threads,u64,stundb,update,1,1.72,Mops/s
+threads,u64,stundb,get90/update10,1,1.96,Mops/s
+threads,u64,stundb,scan90/update10,1,0.81,Mops/s
+threads,u64,stundb,insert,2,3.95,Mops/s
+threads,u64,stundb,get,2,4.95,Mops/s
+threads,u64,stundb,update,2,4.04,Mops/s
+threads,u64,stundb,get90/update10,2,4.86,Mops/s
+threads,u64,stundb,scan90/update10,2,1.64,Mops/s
+threads,u64,stundb,insert,4,6.66,Mops/s
+threads,u64,stundb,get,4,10.82,Mops/s
+threads,u64,stundb,update,4,9.09,Mops/s
+threads,u64,stundb,get90/update10,4,10.66,Mops/s
+threads,u64,stundb,scan90/update10,4,2.90,Mops/s
+threads,u64,stundb (batched),insert,1,3.53,Mops/s
+threads,u64,stundb (batched),get,1,8.11,Mops/s
+threads,u64,stundb (batched),insert,2,6.56,Mops/s
+threads,u64,stundb (batched),get,2,16.29,Mops/s
+threads,u64,stundb (batched),insert,4,9.06,Mops/s
+threads,u64,stundb (batched),get,4,21.90,Mops/s
+threads,u64,skipmap,insert,1,0.24,Mops/s
+threads,u64,skipmap,get,1,0.32,Mops/s
+threads,u64,skipmap,update,1,0.32,Mops/s
+threads,u64,skipmap,get90/update10,1,0.31,Mops/s
+threads,u64,skipmap,insert,2,0.58,Mops/s
+threads,u64,skipmap,get,2,0.68,Mops/s
+threads,u64,skipmap,update,2,0.70,Mops/s
+threads,u64,skipmap,get90/update10,2,0.67,Mops/s
+threads,u64,skipmap,insert,4,1.06,Mops/s
+threads,u64,skipmap,get,4,1.42,Mops/s
+threads,u64,skipmap,update,4,1.43,Mops/s
+threads,u64,skipmap,get90/update10,4,1.39,Mops/s
+threads,u64,RWMutex+google/btree,insert,1,1.35,Mops/s
+threads,u64,RWMutex+google/btree,get,1,1.28,Mops/s
+threads,u64,RWMutex+google/btree,update,1,1.21,Mops/s
+threads,u64,RWMutex+google/btree,get90/update10,1,1.22,Mops/s
+threads,u64,RWMutex+google/btree,scan90/update10,1,0.48,Mops/s
+threads,u64,RWMutex+google/btree,insert,2,1.09,Mops/s
+threads,u64,RWMutex+google/btree,get,2,2.61,Mops/s
+threads,u64,RWMutex+google/btree,update,2,1.16,Mops/s
+threads,u64,RWMutex+google/btree,get90/update10,2,1.15,Mops/s
+threads,u64,RWMutex+google/btree,scan90/update10,2,0.44,Mops/s
+threads,u64,RWMutex+google/btree,insert,4,1.11,Mops/s
+threads,u64,RWMutex+google/btree,get,4,5.43,Mops/s
+threads,u64,RWMutex+google/btree,update,4,1.15,Mops/s
+threads,u64,RWMutex+google/btree,get90/update10,4,1.13,Mops/s
+threads,u64,RWMutex+google/btree,scan90/update10,4,0.48,Mops/s
+threads,u64,xsync.Map,insert,1,3.01,Mops/s
+threads,u64,xsync.Map,get,1,13.87,Mops/s
+threads,u64,xsync.Map,update,1,5.79,Mops/s
+threads,u64,xsync.Map,get90/update10,1,10.58,Mops/s
+threads,u64,xsync.Map,insert,2,5.72,Mops/s
+threads,u64,xsync.Map,get,2,25.91,Mops/s
+threads,u64,xsync.Map,update,2,11.33,Mops/s
+threads,u64,xsync.Map,get90/update10,2,20.20,Mops/s
+threads,u64,xsync.Map,insert,4,6.90,Mops/s
+threads,u64,xsync.Map,get,4,31.02,Mops/s
+threads,u64,xsync.Map,update,4,13.55,Mops/s
+threads,u64,xsync.Map,get90/update10,4,27.80,Mops/s
+threads,uuid,stundb,insert,1,1.89,Mops/s
+threads,uuid,stundb,get,1,2.80,Mops/s
+threads,uuid,stundb,update,1,2.45,Mops/s
+threads,uuid,stundb,get90/update10,1,2.74,Mops/s
+threads,uuid,stundb,scan90/update10,1,0.78,Mops/s
+threads,uuid,stundb,insert,2,3.79,Mops/s
+threads,uuid,stundb,get,2,5.38,Mops/s
+threads,uuid,stundb,update,2,4.25,Mops/s
+threads,uuid,stundb,get90/update10,2,5.24,Mops/s
+threads,uuid,stundb,scan90/update10,2,1.49,Mops/s
+threads,uuid,stundb,insert,4,6.22,Mops/s
+threads,uuid,stundb,get,4,10.90,Mops/s
+threads,uuid,stundb,update,4,8.89,Mops/s
+threads,uuid,stundb,get90/update10,4,10.70,Mops/s
+threads,uuid,stundb,scan90/update10,4,2.42,Mops/s
+threads,uuid,stundb (batched),insert,1,2.88,Mops/s
+threads,uuid,stundb (batched),get,1,6.42,Mops/s
+threads,uuid,stundb (batched),insert,2,5.53,Mops/s
+threads,uuid,stundb (batched),get,2,12.63,Mops/s
+threads,uuid,stundb (batched),insert,4,7.85,Mops/s
+threads,uuid,stundb (batched),get,4,18.51,Mops/s
+threads,uuid,skipmap,insert,1,0.31,Mops/s
+threads,uuid,skipmap,get,1,0.35,Mops/s
+threads,uuid,skipmap,update,1,0.36,Mops/s
+threads,uuid,skipmap,get90/update10,1,0.35,Mops/s
+threads,uuid,skipmap,insert,2,0.65,Mops/s
+threads,uuid,skipmap,get,2,0.71,Mops/s
+threads,uuid,skipmap,update,2,0.70,Mops/s
+threads,uuid,skipmap,get90/update10,2,0.69,Mops/s
+threads,uuid,skipmap,insert,4,1.19,Mops/s
+threads,uuid,skipmap,get,4,1.38,Mops/s
+threads,uuid,skipmap,update,4,1.44,Mops/s
+threads,uuid,skipmap,get90/update10,4,1.39,Mops/s
+threads,uuid,RWMutex+google/btree,insert,1,0.71,Mops/s
+threads,uuid,RWMutex+google/btree,get,1,0.74,Mops/s
+threads,uuid,RWMutex+google/btree,update,1,0.77,Mops/s
+threads,uuid,RWMutex+google/btree,get90/update10,1,0.76,Mops/s
+threads,uuid,RWMutex+google/btree,scan90/update10,1,0.32,Mops/s
+threads,uuid,RWMutex+google/btree,insert,2,0.67,Mops/s
+threads,uuid,RWMutex+google/btree,get,2,1.54,Mops/s
+threads,uuid,RWMutex+google/btree,update,2,0.70,Mops/s
+threads,uuid,RWMutex+google/btree,get90/update10,2,0.72,Mops/s
+threads,uuid,RWMutex+google/btree,scan90/update10,2,0.31,Mops/s
+threads,uuid,RWMutex+google/btree,insert,4,0.69,Mops/s
+threads,uuid,RWMutex+google/btree,get,4,3.32,Mops/s
+threads,uuid,RWMutex+google/btree,update,4,0.76,Mops/s
+threads,uuid,RWMutex+google/btree,get90/update10,4,0.78,Mops/s
+threads,uuid,RWMutex+google/btree,scan90/update10,4,0.34,Mops/s
+threads,uuid,xsync.Map,insert,1,2.67,Mops/s
+threads,uuid,xsync.Map,get,1,10.63,Mops/s
+threads,uuid,xsync.Map,update,1,3.42,Mops/s
+threads,uuid,xsync.Map,get90/update10,1,8.51,Mops/s
+threads,uuid,xsync.Map,insert,2,4.93,Mops/s
+threads,uuid,xsync.Map,get,2,20.86,Mops/s
+threads,uuid,xsync.Map,update,2,6.83,Mops/s
+threads,uuid,xsync.Map,get90/update10,2,17.24,Mops/s
+threads,uuid,xsync.Map,insert,4,7.25,Mops/s
+threads,uuid,xsync.Map,get,4,28.79,Mops/s
+threads,uuid,xsync.Map,update,4,13.26,Mops/s
+threads,uuid,xsync.Map,get90/update10,4,22.88,Mops/s
+threads,wiki-titles,stundb,insert,1,0.96,Mops/s
+threads,wiki-titles,stundb,get,1,1.41,Mops/s
+threads,wiki-titles,stundb,update,1,1.35,Mops/s
+threads,wiki-titles,stundb,get90/update10,1,1.38,Mops/s
+threads,wiki-titles,stundb,scan90/update10,1,0.64,Mops/s
+threads,wiki-titles,stundb,insert,2,2.13,Mops/s
+threads,wiki-titles,stundb,get,2,2.77,Mops/s
+threads,wiki-titles,stundb,update,2,2.61,Mops/s
+threads,wiki-titles,stundb,get90/update10,2,2.70,Mops/s
+threads,wiki-titles,stundb,scan90/update10,2,1.24,Mops/s
+threads,wiki-titles,stundb,insert,4,3.59,Mops/s
+threads,wiki-titles,stundb,get,4,4.71,Mops/s
+threads,wiki-titles,stundb,update,4,4.52,Mops/s
+threads,wiki-titles,stundb,get90/update10,4,4.75,Mops/s
+threads,wiki-titles,stundb,scan90/update10,4,2.03,Mops/s
+threads,wiki-titles,stundb (batched),insert,1,1.34,Mops/s
+threads,wiki-titles,stundb (batched),get,1,1.78,Mops/s
+threads,wiki-titles,stundb (batched),insert,2,2.64,Mops/s
+threads,wiki-titles,stundb (batched),get,2,3.36,Mops/s
+threads,wiki-titles,stundb (batched),insert,4,3.86,Mops/s
+threads,wiki-titles,stundb (batched),get,4,5.22,Mops/s
+threads,wiki-titles,skipmap,insert,1,0.26,Mops/s
+threads,wiki-titles,skipmap,get,1,0.29,Mops/s
+threads,wiki-titles,skipmap,update,1,0.30,Mops/s
+threads,wiki-titles,skipmap,get90/update10,1,0.29,Mops/s
+threads,wiki-titles,skipmap,insert,2,0.50,Mops/s
+threads,wiki-titles,skipmap,get,2,0.57,Mops/s
+threads,wiki-titles,skipmap,update,2,0.61,Mops/s
+threads,wiki-titles,skipmap,get90/update10,2,0.58,Mops/s
+threads,wiki-titles,skipmap,insert,4,0.83,Mops/s
+threads,wiki-titles,skipmap,get,4,1.08,Mops/s
+threads,wiki-titles,skipmap,update,4,1.14,Mops/s
+threads,wiki-titles,skipmap,get90/update10,4,1.10,Mops/s
+threads,wiki-titles,RWMutex+google/btree,insert,1,0.53,Mops/s
+threads,wiki-titles,RWMutex+google/btree,get,1,0.60,Mops/s
+threads,wiki-titles,RWMutex+google/btree,update,1,0.61,Mops/s
+threads,wiki-titles,RWMutex+google/btree,get90/update10,1,0.61,Mops/s
+threads,wiki-titles,RWMutex+google/btree,scan90/update10,1,0.27,Mops/s
+threads,wiki-titles,RWMutex+google/btree,insert,2,0.48,Mops/s
+threads,wiki-titles,RWMutex+google/btree,get,2,1.22,Mops/s
+threads,wiki-titles,RWMutex+google/btree,update,2,0.54,Mops/s
+threads,wiki-titles,RWMutex+google/btree,get90/update10,2,0.51,Mops/s
+threads,wiki-titles,RWMutex+google/btree,scan90/update10,2,0.24,Mops/s
+threads,wiki-titles,RWMutex+google/btree,insert,4,0.46,Mops/s
+threads,wiki-titles,RWMutex+google/btree,get,4,2.10,Mops/s
+threads,wiki-titles,RWMutex+google/btree,update,4,0.51,Mops/s
+threads,wiki-titles,RWMutex+google/btree,get90/update10,4,0.50,Mops/s
+threads,wiki-titles,RWMutex+google/btree,scan90/update10,4,0.27,Mops/s
+threads,wiki-titles,xsync.Map,insert,1,1.64,Mops/s
+threads,wiki-titles,xsync.Map,get,1,7.11,Mops/s
+threads,wiki-titles,xsync.Map,update,1,2.33,Mops/s
+threads,wiki-titles,xsync.Map,get90/update10,1,5.93,Mops/s
+threads,wiki-titles,xsync.Map,insert,2,3.06,Mops/s
+threads,wiki-titles,xsync.Map,get,2,13.73,Mops/s
+threads,wiki-titles,xsync.Map,update,2,4.63,Mops/s
+threads,wiki-titles,xsync.Map,get90/update10,2,11.49,Mops/s
+threads,wiki-titles,xsync.Map,insert,4,4.75,Mops/s
+threads,wiki-titles,xsync.Map,get,4,18.76,Mops/s
+threads,wiki-titles,xsync.Map,update,4,8.69,Mops/s
+threads,wiki-titles,xsync.Map,get90/update10,4,16.47,Mops/s
+threads,json,stundb,insert,1,1.57,Mops/s
+threads,json,stundb,get,1,2.21,Mops/s
+threads,json,stundb,update,1,1.95,Mops/s
+threads,json,stundb,get90/update10,1,2.21,Mops/s
+threads,json,stundb,scan90/update10,1,0.75,Mops/s
+threads,json,stundb,insert,2,3.21,Mops/s
+threads,json,stundb,get,2,4.50,Mops/s
+threads,json,stundb,update,2,3.86,Mops/s
+threads,json,stundb,get90/update10,2,4.31,Mops/s
+threads,json,stundb,scan90/update10,2,1.47,Mops/s
+threads,json,stundb,insert,4,5.24,Mops/s
+threads,json,stundb,get,4,7.66,Mops/s
+threads,json,stundb,update,4,6.53,Mops/s
+threads,json,stundb,get90/update10,4,7.50,Mops/s
+threads,json,stundb,scan90/update10,4,2.41,Mops/s
+threads,json,stundb (batched),insert,1,2.22,Mops/s
+threads,json,stundb (batched),get,1,3.65,Mops/s
+threads,json,stundb (batched),insert,2,4.29,Mops/s
+threads,json,stundb (batched),get,2,7.33,Mops/s
+threads,json,stundb (batched),insert,4,5.98,Mops/s
+threads,json,stundb (batched),get,4,9.85,Mops/s
+threads,json,skipmap,insert,1,0.25,Mops/s
+threads,json,skipmap,get,1,0.24,Mops/s
+threads,json,skipmap,update,1,0.24,Mops/s
+threads,json,skipmap,get90/update10,1,0.24,Mops/s
+threads,json,skipmap,insert,2,0.48,Mops/s
+threads,json,skipmap,get,2,0.55,Mops/s
+threads,json,skipmap,update,2,0.56,Mops/s
+threads,json,skipmap,get90/update10,2,0.57,Mops/s
+threads,json,skipmap,insert,4,0.86,Mops/s
+threads,json,skipmap,get,4,1.07,Mops/s
+threads,json,skipmap,update,4,1.01,Mops/s
+threads,json,skipmap,get90/update10,4,0.87,Mops/s
+threads,json,RWMutex+google/btree,insert,1,0.43,Mops/s
+threads,json,RWMutex+google/btree,get,1,0.52,Mops/s
+threads,json,RWMutex+google/btree,update,1,0.52,Mops/s
+threads,json,RWMutex+google/btree,get90/update10,1,0.51,Mops/s
+threads,json,RWMutex+google/btree,scan90/update10,1,0.24,Mops/s
+threads,json,RWMutex+google/btree,insert,2,0.45,Mops/s
+threads,json,RWMutex+google/btree,get,2,1.02,Mops/s
+threads,json,RWMutex+google/btree,update,2,0.44,Mops/s
+threads,json,RWMutex+google/btree,get90/update10,2,0.43,Mops/s
+threads,json,RWMutex+google/btree,scan90/update10,2,0.22,Mops/s
+threads,json,RWMutex+google/btree,insert,4,0.47,Mops/s
+threads,json,RWMutex+google/btree,get,4,1.86,Mops/s
+threads,json,RWMutex+google/btree,update,4,0.44,Mops/s
+threads,json,RWMutex+google/btree,get90/update10,4,0.47,Mops/s
+threads,json,RWMutex+google/btree,scan90/update10,4,0.25,Mops/s
+threads,json,xsync.Map,insert,1,1.97,Mops/s
+threads,json,xsync.Map,get,1,7.12,Mops/s
+threads,json,xsync.Map,update,1,2.23,Mops/s
+threads,json,xsync.Map,get90/update10,1,5.89,Mops/s
+threads,json,xsync.Map,insert,2,3.76,Mops/s
+threads,json,xsync.Map,get,2,14.21,Mops/s
+threads,json,xsync.Map,update,2,4.25,Mops/s
+threads,json,xsync.Map,get90/update10,2,12.02,Mops/s
+threads,json,xsync.Map,insert,4,5.17,Mops/s
+threads,json,xsync.Map,get,4,19.33,Mops/s
+threads,json,xsync.Map,update,4,8.64,Mops/s
+threads,json,xsync.Map,get90/update10,4,16.97,Mops/s

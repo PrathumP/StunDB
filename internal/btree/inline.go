@@ -36,7 +36,8 @@ func padInline[W word]() W {
 // first candidate in a leaf. It has no branches and no dependent loads; the
 // blog's "Binary search vs linear search, again".
 //
-// It is one call, so that it inlines into every node search.
+// It is one call, so that it inlines into every node search, leaving
+// countSlots as the search's only call.
 func countLess[W word](ik *[slots]W, t W) int {
 	return countSlots(unsafe.Pointer(ik), uint32(t), wordBits[W]() == 32)
 }

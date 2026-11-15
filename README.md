@@ -7,7 +7,8 @@ its post [*bbtree: fastest ordered map*](https://bbtree.xiangpeng.systems/post/)
 - **Inline keys behind a fence-derived prefix.** Each node keeps a dense
   array of 2-byte (integers, UUIDs) or 4-byte (strings) slices of its keys,
   taken after the bytes every key in the node shares. One cache line holds
-  32 of them, and a search reads a key only for the one candidate they leave.
+  32 two-byte ones, and a search reads a key only for the one candidate they
+  leave. Nodes are allocated so that they start on a cache line.
 - **A branchless count instead of a binary search.** A node is searched by
   counting its inline keys below the target, in AVX2 (`VPCMPGTW`,
   `VPMOVMSKB`, `POPCNT`) through Go's `simd/archsimd`.
@@ -24,7 +25,11 @@ maps from Rust to Go, and where the Go version differs and why.
 ## Results
 
 10M entries with `uint64` values: the post's workloads, measured by
-[`bench/`](bench/) on a Ryzen 7 4800H laptop. The full tables are in
+[`bench/`](bench/). The current code was measured on two GitHub Actions
+runners (4 vCPUs each) by [the benchmark workflow](.github/workflows/bench.yml):
+an AMD EPYC 9V74 (Zen 4) and an Intel Xeon 6975P-C. Each map runs on the same
+VM in the same job, so ratios between maps hold; nanoseconds on shared VMs
+don't compare with other machines. The full tables are in
 [bench/results/](bench/results/).
 
 **Against the post, ratio for ratio.** Each cell is the speedup over the
@@ -33,59 +38,71 @@ Go's most used B-tree; for bbtree it is Rust's std `BTreeMap`, from the
 post's own runs on a Ryzen 9 9900X. One thread, lookups half of which miss,
 batched calls in brackets:
 
-| keys | get | insert | update | 100-entry scan |
-|---|---|---|---|---|
-| `uint64` | **2.2× (3.4×)** · post 2.4× (3.6×) | 1.4× (2.3×) · post 1.5× (2.1×) | 1.9× · post 2.3× | 1.6× · post 2.7× |
-| UUID | **3.6× (5.1×)** · post 2.8× (3.9×) | 2.3× (3.0×) · post 2.1× (2.7×) | 3.2× · post 2.5× | 2.2× · post 2.3× |
-| Wikipedia titles | **1.9× (2.8×)** · post 1.7× (2.4×) | 1.7× (2.2×) · post 1.5× (1.9×) | 1.8× · post 1.6× | 1.9× · post 1.7× |
-| JSON keys | **3.5× (4.6×)** · post 4.1× (6.5×) | 2.3× (3.0×) · post 2.3× (3.6×) | 3.2× · post 3.4× | 2.4× · post 2.0× |
+| keys | get: EPYC · Xeon · post | insert: EPYC · Xeon · post |
+|---|---|---|
+| `uint64` | 1.9× (5.8×) · 2.4× (7.6×) · 2.4× (3.6×) | 1.6× (2.5×) · 1.6× (3.0×) · 1.5× (2.1×) |
+| UUID | 3.7× (8.3×) · 3.2× (9.3×) · 2.8× (3.9×) | 2.6× (3.9×) · 2.1× (3.6×) · 2.1× (2.7×) |
+| Wikipedia titles | 2.2× (3.0×) · 2.0× (2.9×) · 1.7× (2.4×) | 1.8× (2.4×) · 1.7× (2.5×) · 1.5× (1.9×) |
+| JSON keys | 3.8× (6.6×) · 3.7× (6.9×) · 4.1× (6.5×) | 2.4× (3.7×) · 2.5× (3.7×) · 2.3× (3.6×) |
 
-Nanoseconds per operation, one thread:
+| keys | update: EPYC · Xeon · post | 100-entry scan: EPYC · Xeon · post |
+|---|---|---|
+| `uint64` | 1.7× · 1.9× · 2.3× | 1.7× · 1.5× · 2.7× |
+| UUID | 3.1× · 2.7× · 2.5× | 2.3× · 1.7× · 2.3× |
+| Wikipedia titles | 2.1× · 2.0× · 1.6× | 2.5× · 1.9× · 1.7× |
+| JSON keys | 3.3× · 3.3× · 3.4× | 3.0× · 2.3× · 2.0× |
+
+Batched lookups of fixed-size keys gain far more on these server CPUs than on
+the laptop below: 5.8 to 9.3 times google/btree for `uint64` and UUID keys,
+against 3.4 and 5.1 on the laptop. I haven't measured why; more memory
+requests in flight per core is the likely reason.
+
+Nanoseconds per operation, one thread (EPYC / Xeon):
 
 | keys | stundb get (batched) | google/btree get | stundb insert (batched) | google/btree insert |
 |---|--:|--:|--:|--:|
-| `uint64` | 380 (253) | 853 | 666 (395) | 907 |
-| UUID | 383 (269) | 1363 | 643 (492) | 1458 |
-| Wikipedia titles | 1026 (671) | 1905 | 1298 (1023) | 2221 |
-| JSON keys | 513 (394) | 1806 | 836 (651) | 1949 |
+| `uint64` | 362 (119) / 302 (95) | 690 / 723 | 410 (258) / 377 (202) | 648 / 604 |
+| UUID | 345 (152) / 353 (120) | 1265 / 1124 | 500 (330) / 490 (292) | 1276 / 1048 |
+| Wikipedia titles | 797 (593) / 678 (466) | 1749 / 1357 | 1037 (782) / 893 (612) | 1844 / 1518 |
+| JSON keys | 478 (274) / 414 (223) | 1807 / 1535 | 718 (478) / 610 (418) | 1742 / 1526 |
 
-**Threads** (`uint64` keys, millions of operations per second):
+**Threads** (`uint64` keys, millions of operations per second, EPYC / Xeon):
 
-| | 1 thread | 8 (all cores) | 16 (SMT) |
+| | 1 thread | 2 | 4 |
 |---|--:|--:|--:|
-| stundb get | 3.4 | 19.3 | **29.8** |
-| stundb get, batched | 5.3 | 25.9 | 26.3 |
-| skipmap get | 0.4 | 2.9 | 4.5 |
-| RWMutex+google/btree get | 1.5 | 9.4 | 14.0 |
-| stundb update | 2.9 | 14.7 | **20.9** |
-| RWMutex+google/btree update | 1.5 | 1.3 | 1.3 |
+| stundb get | 2.1 / 3.2 | 5.0 / 6.3 | **10.8 / 11.2** |
+| stundb get, batched | 8.1 / 10.0 | 16.3 / 20.5 | 21.9 / 26.0 |
+| skipmap get | 0.3 / 0.3 | 0.7 / 0.7 | 1.4 / 1.3 |
+| RWMutex+google/btree get | 1.3 / 1.3 | 2.6 / 2.5 | 5.4 / 4.7 |
+| stundb update | 1.7 / 2.9 | 4.0 / 5.9 | **9.1 / 9.3** |
+| RWMutex+google/btree update | 1.2 / 1.4 | 1.2 / 1.3 | 1.2 / 1.2 |
 
-At 16 threads stundb's lookups are 6.6× the lock-free skiplist's. The post
-measures 5.1× against crossbeam-skiplist at 24 threads and 12× at 96 cores,
-which this laptop doesn't have. Under writes, a tree-wide `RWMutex` stops
-scaling at one core, while stundb's updates scale with cores: 16× its
-throughput at 16 threads.
+At 4 threads stundb's lookups are 7.6 to 8.8 times the lock-free skiplist's,
+and its updates 7.5 to 7.9 times a tree behind an `RWMutex`, which doesn't
+scale past one writer.
+
+**On 16 threads**, from the first version of the rewrite on a Ryzen 7 4800H
+laptop (8 cores, before the fixes from the adversarial review, in
+[ryzen-4800h-20261103.md](bench/results/ryzen-4800h-20261103.md)): 29.8M
+lookups a second, 6.6 times the skiplist, and updates at 20.9M a second, 16
+times the `RWMutex` tree. The post measures 5.1 times crossbeam-skiplist at 24
+threads. On that laptop StunDB looked up a `uint64` in 380 ns against 3,752 ns
+for StunDB before the rewrite (4 keys a node, one tree-wide `RWMutex`), 9.9
+times faster.
 
 **Memory:** 27.5 bytes per `uint64` entry, close to bbtree's 27.1. Go's
-B-trees store items more tightly than Rust's std, though: they take 24.7,
-so StunDB is 11% above them, 14% on UUIDs, and 19–24% on strings (a string
-leaf is 1,568 bytes, rounded up to Go's 1,792-byte size class). The skiplist
-takes 88.4.
+B-trees store items more tightly than Rust's std, though: google/btree takes
+24.7, so StunDB is 10 to 14% above it across the four key sets (39.6 against
+36.1 bytes on UUIDs, 68.0 against 61.6 on Wikipedia titles, 53.4 against 47.0
+on JSON keys). The skiplist takes 88.4.
 
-**Against StunDB before this rewrite** (4 keys a node, one tree-wide
-`RWMutex`): 3,752 ns a lookup and 4,202 ns an insert at 10M, so lookups are
-now 9.9× faster (14.8× batched) and inserts 6.3×.
-
-**Why the nanoseconds aren't the post's.** The post's 9900X has 32 MB of L3
-per core complex, which holds a 10M-entry tree's internal nodes, and faster
-DDR5. This laptop has 4 MB of L3 per core complex, and a dependent DRAM miss
-costs it 94 ns (121 ns without huge pages, measured by pointer chasing). So
-the internal level just above the leaves misses too: a lookup here waits on
-about 3.5 dependent misses where the post's waits on about 1.5, which is
-380 ns against 109. The same hardware penalty hits the baselines, so the
-ratios hold. The concurrent numbers are bounded by the laptop's two memory
-channels (about 30M lookups a second × 3.5 lines from DRAM), not by
-contention: no lookup writes to shared memory.
+**Why the nanoseconds aren't the post's.** A lookup's time is mostly dependent
+cache misses to DRAM, so it tracks the memory system more than the code. The
+post's 9900X has 32 MB of L3 per core complex, which holds a 10M-entry tree's
+internal nodes, so a lookup misses about 1.5 times: 109 ns. The 4800H laptop
+has 4 MB per core complex and waits on about 3.5 misses at 94 ns: 380 ns. A
+4-vCPU slice of a shared server sees a share of its cache and server memory
+latency. The baselines pay the same penalty, so the ratios hold.
 
 ## Quick start
 
@@ -159,6 +176,7 @@ err = db.Insert([]byte("user:1"), []byte("Alice"))
 GOEXPERIMENT=simd go test ./...       # AVX2 search
 go test ./...                          # portable search
 go test -race ./...                    # see below
+GOARCH=386 go test ./...               # 32-bit, where a string is 8 bytes
 go test -fuzz FuzzU64 ./internal/btree # differential fuzzing against a Go map
 go test -fuzz FuzzString ./internal/btree
 ```
@@ -179,6 +197,12 @@ go test -fuzz FuzzString ./internal/btree
   writers against readers with a lock (`race_on.go`). The layers above are
   race-checked against the same API, and the stress tests cover the
   optimistic paths in ordinary builds.
+- **Regression tests** (`clear_test.go`, `regression_test.go`,
+  `crash_test.go`) reproduce the bugs an adversarial review found: `Clear`
+  racing a root split, counts after `Clear`, stale and inconsistent
+  secondary indexes, a torn WAL tail hiding later writes, and partial bulk
+  inserts. `crash_test.go` kills a child process in the middle of a write and
+  recovers its WAL.
 
 ## Benchmarks
 
@@ -193,6 +217,14 @@ cd bench
 ./fetch-data.sh                         # Wikipedia titles, 110 MB
 GOAMD64=v3 GOEXPERIMENT=simd go run . -mode single -keys u64,uuid
 ./run-all.sh                            # every cell, about an hour
+```
+
+To run every table on GitHub's runners instead, push a tag; the
+[workflow](.github/workflows/bench.yml) runs on two VMs and publishes the
+tables as a prerelease:
+
+```bash
+git tag bench-$(date +%Y%m%d) && git push origin bench-$(date +%Y%m%d)
 ```
 
 Microbenchmarks of the tree alone: `go test -bench . ./internal/btree`.
@@ -210,7 +242,8 @@ Microbenchmarks of the tree alone: `go test -bench . ./internal/btree`.
   experimental in Go 1.26.
 - **No `Len` in O(1)**, by design (a shared counter is contention);
   `kv.Store.Count` keeps a striped count.
-- **Scans are not snapshots**, and `Clear` is not atomic with concurrent
-  writers.
+- **Scans are not snapshots.** An entry present for a whole scan is seen
+  once; one written during it may or may not be. A write that races `Clear`
+  either lands before it or is discarded with the old contents.
 - The WAL records mutations and replays them; the tree itself is never
   written to disk.

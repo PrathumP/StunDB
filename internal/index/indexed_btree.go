@@ -1,6 +1,7 @@
 package index
 
 import (
+	"bytes"
 	"errors"
 	"sync"
 
@@ -9,10 +10,19 @@ import (
 
 // IndexedBTree wraps the primary store and keeps one or more SecondaryIndexes in
 // sync as records are inserted, updated, and deleted.
+//
+// A write changes the primary store and every index, and those changes must
+// agree, so writers are serialized by wmu: each one reads the record it
+// replaces, checks unique constraints, and applies its changes with no other
+// writer in between. Readers take no write lock. A reader may see a write
+// applied to the primary store and not yet to an index, or the other way
+// round; FindByIndex and its kin can therefore return a primary key whose
+// record has just changed.
 type IndexedBTree struct {
 	tree    *kv.Store
 	indexes map[string]*SecondaryIndex
-	mu      sync.RWMutex
+	mu      sync.RWMutex // guards indexes, the map itself
+	wmu     sync.Mutex   // serializes writers
 }
 
 // IndexedConfig configures the indexed B-Tree. It has no options yet; the
@@ -44,59 +54,51 @@ func (db *IndexedBTree) PrimaryTree() *kv.Store {
 	return db.tree
 }
 
-// CreateIndex creates a new secondary index on the tree.
-// If rebuild is true, indexes all existing records.
+// CreateIndex creates a new, empty secondary index. Records already in the
+// store are not indexed; use CreateIndexWithRebuild for that.
 func (db *IndexedBTree) CreateIndex(name string, extractor KeyExtractor, unique bool) error {
+	db.wmu.Lock()
+	defer db.wmu.Unlock()
+	return db.addIndex(name, NewSecondaryIndex(IndexConfig{Name: name, Extractor: extractor, Unique: unique}))
+}
+
+func (db *IndexedBTree) addIndex(name string, idx *SecondaryIndex) error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
-
 	if _, exists := db.indexes[name]; exists {
 		return errors.New("index already exists")
 	}
-
-	idx := NewSecondaryIndex(IndexConfig{
-		Name:      name,
-		Extractor: extractor,
-		Unique:    unique,
-	})
-
 	db.indexes[name] = idx
 	return nil
 }
 
-// CreateIndexWithRebuild creates an index and populates it with existing data.
+// CreateIndexWithRebuild creates an index and populates it with existing
+// data. It holds off writers while it builds the index, and adds the index
+// only once it is complete, so a unique index that the data violates is never
+// added.
 func (db *IndexedBTree) CreateIndexWithRebuild(name string, extractor KeyExtractor, unique bool) error {
-	if err := db.CreateIndex(name, extractor, unique); err != nil {
-		return err
+	db.wmu.Lock()
+	defer db.wmu.Unlock()
+
+	if db.HasIndex(name) {
+		return errors.New("index already exists")
 	}
-
-	// Rebuild index from existing data
-	db.mu.RLock()
-	idx := db.indexes[name]
-	db.mu.RUnlock()
-
+	idx := NewSecondaryIndex(IndexConfig{Name: name, Extractor: extractor, Unique: unique})
 	var indexErr error
 	db.tree.ForEach(func(key Keytype, value Valuetype) bool {
-		if err := idx.Index(key, value); err != nil {
-			indexErr = err
-			return false // Stop on error (unique constraint violation)
-		}
-		return true
+		indexErr = idx.Index(key, value)
+		return indexErr == nil // stop on a unique constraint violation
 	})
-
 	if indexErr != nil {
-		// Rollback: remove the index
-		db.mu.Lock()
-		delete(db.indexes, name)
-		db.mu.Unlock()
 		return indexErr
 	}
-
-	return nil
+	return db.addIndex(name, idx)
 }
 
 // DropIndex removes a secondary index.
 func (db *IndexedBTree) DropIndex(name string) error {
+	db.wmu.Lock()
+	defer db.wmu.Unlock()
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
@@ -128,40 +130,29 @@ func (db *IndexedBTree) ListIndexes() []string {
 	return names
 }
 
-// Insert adds a record and updates all secondary indexes.
-func (db *IndexedBTree) Insert(key Keytype, value Valuetype) error {
+// indexList returns the current indexes. Writers call it under wmu, which
+// also guards against the set changing.
+func (db *IndexedBTree) indexList() []*SecondaryIndex {
 	db.mu.RLock()
+	defer db.mu.RUnlock()
 	indexes := make([]*SecondaryIndex, 0, len(db.indexes))
 	for _, idx := range db.indexes {
 		indexes = append(indexes, idx)
 	}
-	db.mu.RUnlock()
+	return indexes
+}
 
-	// Check unique constraints first
-	for _, idx := range indexes {
-		if idx.unique {
-			indexKey := idx.extractor(value)
-			if indexKey != nil {
-				if _, err := idx.FindOne(indexKey); err == nil {
-					return errors.New("unique constraint violation on index: " + idx.name)
-				}
-			}
-		}
+// Insert sets the record at key to value and updates every index. If key
+// already holds a record, its index entries are replaced. If value would give
+// a unique index a second record, Insert changes nothing and returns an error.
+func (db *IndexedBTree) Insert(key Keytype, value Valuetype) error {
+	db.wmu.Lock()
+	defer db.wmu.Unlock()
+	old, err := db.tree.Find(key)
+	if err != nil {
+		old = nil
 	}
-
-	// Insert into primary tree
-	db.tree.Insert(key, value)
-
-	// Update all indexes
-	for _, idx := range indexes {
-		if err := idx.Index(key, value); err != nil {
-			// Rollback: remove from primary tree
-			db.tree.Delete(key)
-			return err
-		}
-	}
-
-	return nil
+	return db.write(key, old, err == nil, value)
 }
 
 // Put is an alias for Insert.
@@ -169,76 +160,69 @@ func (db *IndexedBTree) Put(key Keytype, value Valuetype) error {
 	return db.Insert(key, value)
 }
 
-// Update updates a record and maintains all secondary indexes.
+// Update replaces the record at key, which must exist, and updates every
+// index. If newValue would give a unique index a second record, Update
+// changes nothing and returns an error.
 func (db *IndexedBTree) Update(key Keytype, newValue Valuetype) error {
-	// Get old value for index update
-	oldValue, err := db.tree.Find(key)
+	db.wmu.Lock()
+	defer db.wmu.Unlock()
+	old, err := db.tree.Find(key)
 	if err != nil {
 		return errors.New("key not found")
 	}
+	return db.write(key, old, true, newValue)
+}
 
-	db.mu.RLock()
-	indexes := make([]*SecondaryIndex, 0, len(db.indexes))
-	for _, idx := range db.indexes {
-		indexes = append(indexes, idx)
-	}
-	db.mu.RUnlock()
+// write stores value at key, whose current record is old if exists, and
+// updates every index. The caller holds wmu.
+func (db *IndexedBTree) write(key Keytype, old Valuetype, exists bool, value Valuetype) error {
+	indexes := db.indexList()
 
-	// Check unique constraints for new value
+	// Check every unique constraint before changing anything. A value already
+	// indexed under this same key is not a violation: it is the record being
+	// replaced.
 	for _, idx := range indexes {
-		if idx.unique {
-			oldIndexKey := idx.extractor(oldValue)
-			newIndexKey := idx.extractor(newValue)
-
-			// Only check if index key changed
-			if newIndexKey != nil && !bytesEqual(oldIndexKey, newIndexKey) {
-				if _, err := idx.FindOne(newIndexKey); err == nil {
-					return errors.New("unique constraint violation on index: " + idx.name)
-				}
-			}
+		if !idx.unique {
+			continue
+		}
+		indexKey := idx.extractor(value)
+		if indexKey == nil {
+			continue
+		}
+		if owner, err := idx.FindOne(indexKey); err == nil && !bytes.Equal(owner, key) {
+			return errors.New("unique constraint violation on index: " + idx.name)
 		}
 	}
 
-	// Update primary tree
-	db.tree.Insert(key, newValue)
-
-	// Update all indexes
+	db.tree.Insert(key, value)
 	for _, idx := range indexes {
-		if err := idx.Update(key, oldValue, newValue); err != nil {
-			// This shouldn't fail after constraint check, but handle it
+		var err error
+		if exists {
+			err = idx.Update(key, old, value)
+		} else {
+			err = idx.Index(key, value)
+		}
+		if err != nil {
+			// The check above rules this out while writers are serialized.
 			return err
 		}
 	}
-
 	return nil
 }
 
 // Delete removes a record and updates all secondary indexes.
 func (db *IndexedBTree) Delete(key Keytype) (bool, error) {
-	// Get value for index removal
+	db.wmu.Lock()
+	defer db.wmu.Unlock()
+
 	value, err := db.tree.Find(key)
 	if err != nil {
 		return false, nil // Key doesn't exist
 	}
-
-	db.mu.RLock()
-	indexes := make([]*SecondaryIndex, 0, len(db.indexes))
-	for _, idx := range db.indexes {
-		indexes = append(indexes, idx)
-	}
-	db.mu.RUnlock()
-
-	// Delete from primary tree
-	deleted := db.tree.Delete(key)
-	if !deleted {
-		return false, nil
-	}
-
-	// Remove from all indexes
-	for _, idx := range indexes {
+	db.tree.Delete(key)
+	for _, idx := range db.indexList() {
 		idx.Remove(key, value)
 	}
-
 	return true, nil
 }
 
@@ -304,26 +288,19 @@ func (db *IndexedBTree) Count() int64 {
 	return db.tree.Count()
 }
 
-// ForEach iterates over all key-value pairs.
+// ForEach calls fn on copies of the records in key order until fn returns
+// false. It is not a snapshot.
 func (db *IndexedBTree) ForEach(fn func(key Keytype, value Valuetype) bool) {
 	db.tree.ForEach(fn)
 }
 
 // Clear removes all records and clears all indexes.
 func (db *IndexedBTree) Clear() {
-	db.mu.RLock()
-	indexes := make([]*SecondaryIndex, 0, len(db.indexes))
-	for _, idx := range db.indexes {
-		indexes = append(indexes, idx)
-	}
-	db.mu.RUnlock()
-
-	// Clear indexes
-	for _, idx := range indexes {
+	db.wmu.Lock()
+	defer db.wmu.Unlock()
+	for _, idx := range db.indexList() {
 		idx.Clear()
 	}
-
-	// Clear primary tree
 	db.tree.Clear()
 }
 
@@ -341,23 +318,4 @@ func (db *IndexedBTree) Stats() IndexedStats {
 		PrimaryStats: db.tree.Stats(),
 		IndexStats:   indexStats,
 	}
-}
-
-// bytesEqual compares two byte slices, handling nil.
-func bytesEqual(a, b []byte) bool {
-	if a == nil && b == nil {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
 }

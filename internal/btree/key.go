@@ -35,9 +35,12 @@ const (
 // every `switch kindOf[K]()` folds away: a uint64 tree contains no string code
 // and pays nothing to ask. This is how the tree gets per-type node code without
 // Rust's monomorphization (the blog's "we specialize the common types by hand").
+//
+// isU64 is the one test that depends on the platform: see key_kind64.go and
+// key_kind32.go.
 func kindOf[K Key]() keyKind {
 	var k K
-	if unsafe.Sizeof(k) == 8 {
+	if isU64[K]() {
 		return kindU64
 	}
 	if unsafe.Alignof(k) == 1 {
